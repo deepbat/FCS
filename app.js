@@ -71,48 +71,40 @@ async function signup(){const {data,error}=await db.auth.signUp({email:$('email'
 async function loadAdmin(){await Promise.all([loadEmployeesAdmin(),loadRulesAdmin(),loadHolidays(),loadRecords(),loadAttendance()])}
 
 async function loadRecords(){
-  const {start,end}=monthRange($('monthFilter').value||monthNow());
-  const {data,error}=await db.from('daily_records').select('id,work_date,in_time,out_time,worked_minutes,ot_minutes,employees(name,category)').gte('work_date',start).lt('work_date',end).order('work_date');
-  if(error){$('recordsTable').innerHTML='<tr><td>'+esc(error.message)+'</td></tr>';return}
-  const rows=data||[],ot=rows.reduce((a,r)=>a+(r.ot_minutes||0),0);
-  $('recordSummary').textContent=rows.length+' records | Total OT '+fmtMin(ot);
-  $('recordsTable').innerHTML='<tr><th>Date</th><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Action</th></tr>'+
-  rows.map(r=>'<tr><td>'+r.work_date+'</td><td>'+esc(r.employees?.name)+'</td><td>'+esc(r.employees?.category)+'</td><td>'+r.in_time.slice(0,5)+'</td><td>'+r.out_time.slice(0,5)+'</td><td>'+fmtMin(r.worked_minutes)+'</td><td>'+fmtMin(r.ot_minutes)+'</td><td><button class="secondary" onclick="editRecord(\''+r.id+'\',\''+r.in_time.slice(0,5)+'\',\''+r.out_time.slice(0,5)+'\\')">Edit</button></td></tr>').join('');
-  await loadMonthlySummary(start,end,rows);
-}
-async function loadMonthlySummary(start,end,rows){
-  const [{data:emps},{data:att},{data:hols}]=await Promise.all([
-    db.from('employees').select('id,name,category').order('name'),
-    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end)
+  const m=$('monthFilter').value||monthNow(),{start:dateStart,end}=monthRange(m);
+  const employeeId=$('recordEmployee').value;
+  const [{data:emps},{data:rows,error},{data:att},{data:hols}]=await Promise.all([
+    db.from('employees').select('id,name,category').eq('active',true).order('name'),
+    db.from('daily_records').select('id,work_date,in_time,out_time,worked_minutes,ot_minutes,employee_id').gte('work_date',dateStart).lt('work_date',end).order('work_date'),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',dateStart).lt('work_date',end),
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',dateStart).lt('holiday_date',end)
   ]);
-  const attMap=new Map((att||[]).map(x=>[x.work_date+'|'+x.employee_id,x.status]));
-  const holidays=new Set((hols||[]).map(x=>x.holiday_date));
-  const byEmp=new Map();
-  for(const r of rows){
-    const id=r.employees?.name+'|'+r.employees?.category;
-    const x=byEmp.get(id)||{name:r.employees?.name||'',category:r.employees?.category||'',records:0,worked:0,ot:0};
-    x.records++;x.worked+=Number(r.worked_minutes)||0;x.ot+=Number(r.ot_minutes)||0;byEmp.set(id,x);
+  if(error){$('recordsTable').innerHTML='<tr><td>'+esc(error.message)+'</td></tr>';return}
+  const list=emps||[];
+  const current=employeeId&&list.some(e=>e.id===employeeId)?employeeId:(list[0]?.id||'');
+  $('recordEmployee').innerHTML=list.map(e=>'<option value="'+e.id+'" '+(e.id===current?'selected':'')+'>'+esc(e.name)+' ('+esc(e.category)+')</option>').join('');
+  if(!current){
+    $('recordSummary').textContent='No active employees';
+    $('recordsTable').innerHTML='';
+    return;
   }
-  const d=new Date(start+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
-  for(const e of emps||[]){
-    const id=e.name+'|'+e.category,x=byEmp.get(id)||{name:e.name,category:e.category,records:0,worked:0,ot:0};
-    x.present=0;x.absent=0;x.leave=0;x.half=0;x.holiday=0;x.sunday=0;
-    for(let day=1;day<=days;day++){
-      const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-      const status=attMap.get(ds+'|'+e.id)||(holidays.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
-      if(status==='Present')x.present++;
-      else if(status==='Absent')x.absent++;
-      else if(status==='Leave')x.leave++;
-      else if(status==='Half Day')x.half++;
-      else if(status==='Holiday')x.holiday++;
-      else if(status==='Sunday')x.sunday++;
-    }
-    byEmp.set(id,x);
+  const emp=list.find(e=>e.id===current);
+  const records=(rows||[]).filter(r=>r.employee_id===current);
+  const recordMap=new Map(records.map(r=>[r.work_date,r]));
+  const attMap=new Map((att||[]).map(x=>[x.work_date,x.status]));
+  const holidayMap=new Map((hols||[]).map(x=>[x.holiday_date,x.name]));
+  const d=new Date(dateStart+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
+  let totalOt=0,totalWorked=0,html='<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th><th>Action</th></tr>';
+  for(let day=1;day<=days;day++){
+    const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    const rec=recordMap.get(ds),status=attMap.get(ds)||(holidayMap.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
+    const dow=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
+    if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
+    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td>'+(rec?'<button class="secondary" onclick="editRecord(\\''+rec.id+'\\',\\''+rec.in_time.slice(0,5)+'\\',\\''+rec.out_time.slice(0,5)+'\\')">Edit</button>':'')+'</td></tr>';
   }
-  const summary=[...byEmp.values()];
-  $('monthlySummaryTable').innerHTML='<tr><th>Employee</th><th>Category</th><th>Records</th><th>Worked</th><th>OT</th><th>Present</th><th>Absent</th><th>Leave</th><th>Half Day</th><th>Holiday</th><th>Sunday</th></tr>'+
-    summary.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.category)+'</td><td>'+x.records+'</td><td>'+fmtMin(x.worked)+'</td><td>'+fmtMin(x.ot)+'</td><td>'+x.present+'</td><td>'+x.absent+'</td><td>'+x.leave+'</td><td>'+x.half+'</td><td>'+x.holiday+'</td><td>'+x.sunday+'</td></tr>').join('');
+  $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
+  $('recordSummary').textContent=emp.name+' | '+emp.category+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
+  $('recordsTable').innerHTML=html;
 }
 window.editRecord=async(id,inTime,outTime)=>{
   const ni=prompt('First IN time',inTime),no=prompt('Last OUT time',outTime);
@@ -210,7 +202,7 @@ function setupTabs(){
 $('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceMonth').value=monthNow();
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
-$('refreshRecords').onclick=loadRecords;$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('exportAttendance').onclick=exportAttendance;
+$('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('exportAttendance').onclick=exportAttendance;
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveRules').onclick=saveRules;setupTabs();
 
 (async()=>{
