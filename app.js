@@ -113,7 +113,7 @@ async function loadRecords(){
   const emp=list.find(e=>e.id===current);
   const records=(rows||[]).filter(r=>r.employee_id===current);
   const recordMap=new Map(records.map(r=>[r.work_date,r]));
-  const attMap=new Map((att||[]).map(x=>[x.work_date,x.status]));
+  const attMap=new Map((att||[]).filter(x=>x.employee_id===current).map(x=>[x.work_date,x.status]));
   const holidayMap=new Map((hols||[]).map(x=>[x.holiday_date,x.name]));
   const d=new Date(dateStart+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
   let totalOt=0,totalWorked=0,html='<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th><th>Action</th></tr>';
