@@ -77,7 +77,7 @@ async function loadRecords(){
   const rows=data||[],ot=rows.reduce((a,r)=>a+(r.ot_minutes||0),0);
   $('recordSummary').textContent=rows.length+' records | Total OT '+fmtMin(ot);
   $('recordsTable').innerHTML='<tr><th>Date</th><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Action</th></tr>'+
-  rows.map(r=>'<tr><td>'+r.work_date+'</td><td>'+esc(r.employees?.name)+'</td><td>'+esc(r.employees?.category)+'</td><td>'+r.in_time.slice(0,5)+'</td><td>'+r.out_time.slice(0,5)+'</td><td>'+fmtMin(r.worked_minutes)+'</td><td>'+fmtMin(r.ot_minutes)+'</td><td><button class="secondary" onclick="editRecord(\\''+r.id+'\\',\\''+r.in_time.slice(0,5)+'\\',\\''+r.out_time.slice(0,5)+'\\')">Edit</button></td></tr>').join('');
+  rows.map(r=>'<tr><td>'+r.work_date+'</td><td>'+esc(r.employees?.name)+'</td><td>'+esc(r.employees?.category)+'</td><td>'+r.in_time.slice(0,5)+'</td><td>'+r.out_time.slice(0,5)+'</td><td>'+fmtMin(r.worked_minutes)+'</td><td>'+fmtMin(r.ot_minutes)+'</td><td><button class="secondary" onclick="editRecord(\''+r.id+'\',\''+r.in_time.slice(0,5)+'\',\''+r.out_time.slice(0,5)+'\\')">Edit</button></td></tr>').join('');
   await loadMonthlySummary(start,end,rows);
 }
 async function loadMonthlySummary(start,end,rows){
