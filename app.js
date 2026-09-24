@@ -77,7 +77,42 @@ async function loadRecords(){
   const rows=data||[],ot=rows.reduce((a,r)=>a+(r.ot_minutes||0),0);
   $('recordSummary').textContent=rows.length+' records | Total OT '+fmtMin(ot);
   $('recordsTable').innerHTML='<tr><th>Date</th><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Action</th></tr>'+
-  rows.map(r=>'<tr><td>'+r.work_date+'</td><td>'+esc(r.employees?.name)+'</td><td>'+esc(r.employees?.category)+'</td><td>'+r.in_time.slice(0,5)+'</td><td>'+r.out_time.slice(0,5)+'</td><td>'+fmtMin(r.worked_minutes)+'</td><td>'+fmtMin(r.ot_minutes)+'</td><td><button class="secondary" onclick="editRecord(\''+r.id+'\',\''+r.in_time.slice(0,5)+'\',\''+r.out_time.slice(0,5)+'\')">Edit</button></td></tr>').join('');
+  rows.map(r=>'<tr><td>'+r.work_date+'</td><td>'+esc(r.employees?.name)+'</td><td>'+esc(r.employees?.category)+'</td><td>'+r.in_time.slice(0,5)+'</td><td>'+r.out_time.slice(0,5)+'</td><td>'+fmtMin(r.worked_minutes)+'</td><td>'+fmtMin(r.ot_minutes)+'</td><td><button class="secondary" onclick="editRecord(\\''+r.id+'\\',\\''+r.in_time.slice(0,5)+'\\',\\''+r.out_time.slice(0,5)+'\\')">Edit</button></td></tr>').join('');
+  await loadMonthlySummary(start,end,rows);
+}
+async function loadMonthlySummary(start,end,rows){
+  const [{data:emps},{data:att},{data:hols}]=await Promise.all([
+    db.from('employees').select('id,name,category').order('name'),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
+    db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end)
+  ]);
+  const attMap=new Map((att||[]).map(x=>[x.work_date+'|'+x.employee_id,x.status]));
+  const holidays=new Set((hols||[]).map(x=>x.holiday_date));
+  const byEmp=new Map();
+  for(const r of rows){
+    const id=r.employees?.name+'|'+r.employees?.category;
+    const x=byEmp.get(id)||{name:r.employees?.name||'',category:r.employees?.category||'',records:0,worked:0,ot:0};
+    x.records++;x.worked+=Number(r.worked_minutes)||0;x.ot+=Number(r.ot_minutes)||0;byEmp.set(id,x);
+  }
+  const d=new Date(start+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
+  for(const e of emps||[]){
+    const id=e.name+'|'+e.category,x=byEmp.get(id)||{name:e.name,category:e.category,records:0,worked:0,ot:0};
+    x.present=0;x.absent=0;x.leave=0;x.half=0;x.holiday=0;x.sunday=0;
+    for(let day=1;day<=days;day++){
+      const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+      const status=attMap.get(ds+'|'+e.id)||(holidays.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
+      if(status==='Present')x.present++;
+      else if(status==='Absent')x.absent++;
+      else if(status==='Leave')x.leave++;
+      else if(status==='Half Day')x.half++;
+      else if(status==='Holiday')x.holiday++;
+      else if(status==='Sunday')x.sunday++;
+    }
+    byEmp.set(id,x);
+  }
+  const summary=[...byEmp.values()];
+  $('monthlySummaryTable').innerHTML='<tr><th>Employee</th><th>Category</th><th>Records</th><th>Worked</th><th>OT</th><th>Present</th><th>Absent</th><th>Leave</th><th>Half Day</th><th>Holiday</th><th>Sunday</th></tr>'+
+    summary.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.category)+'</td><td>'+x.records+'</td><td>'+fmtMin(x.worked)+'</td><td>'+fmtMin(x.ot)+'</td><td>'+x.present+'</td><td>'+x.absent+'</td><td>'+x.leave+'</td><td>'+x.half+'</td><td>'+x.holiday+'</td><td>'+x.sunday+'</td></tr>').join('');
 }
 window.editRecord=async(id,inTime,outTime)=>{
   const ni=prompt('First IN time',inTime),no=prompt('Last OUT time',outTime);
