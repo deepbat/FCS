@@ -100,7 +100,7 @@ async function loadRecords(){
     const rec=recordMap.get(ds),status=attMap.get(ds)||(holidayMap.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
     const dow=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
     if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
-    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td>'+(rec?'<button class="secondary" onclick="editRecord(\\''+rec.id+'\\',\\''+rec.in_time.slice(0,5)+'\\',\\''+rec.out_time.slice(0,5)+'\\')">Edit</button>':'')+'</td></tr>';
+    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td>'+(rec?'<button class="secondary" onclick="editRecord(\''+rec.id+'\',\''+rec.in_time.slice(0,5)+'\',\''+rec.out_time.slice(0,5)+'\')">Edit</button>':'')+'</td></tr>';
   }
   $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
   $('recordSummary').textContent=emp.name+' | '+emp.category+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
