@@ -100,11 +100,12 @@ async function loadRecords(){
     const rec=recordMap.get(ds),status=attMap.get(ds)||(holidayMap.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
     const dow=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
     if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
-    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary" onclick="editRecord('+(rec?'\\''+rec.id+'\\'':'null')+',\\''+(rec?rec.in_time.slice(0,5):'')+'\\',\\''+(rec?rec.out_time.slice(0,5):'')+'\\',\\''+ds+'\\',\\''+current+'\\',\\''+emp.category+'\\')">'+(rec?'Edit':'Add')+'</button></td></tr>';
+    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary editRecordBtn" data-id="'+(rec?esc(rec.id):'')+'" data-in="'+(rec?esc(rec.in_time.slice(0,5)):'')+'" data-out="'+(rec?esc(rec.out_time.slice(0,5)):'')+'" data-date="'+ds+'" data-employee="'+current+'" data-category="'+esc(emp.category)+'">'+(rec?'Edit':'Add')+'</button></td></tr>';
   }
   $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
   $('recordSummary').textContent=emp.name+' | '+emp.category+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
+  document.querySelectorAll('.editRecordBtn').forEach(btn=>btn.onclick=()=>editRecord(btn.dataset.id||null,btn.dataset.in,btn.dataset.out,btn.dataset.date,btn.dataset.employee,btn.dataset.category));
 }
 window.editRecord=async(id,inTime,outTime,date,employeeId,category)=>{
   const ni=prompt('First IN time',inTime||'9:00'),no=prompt('Last OUT time',outTime||'5:45');
