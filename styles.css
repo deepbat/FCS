@@ -2,3 +2,5 @@
 .timeEdit{width:105px;min-width:105px;padding:8px;font:inherit;border:1px solid #d1d5db;border-radius:8px;background:#fff}
 
 @media(max-width:700px){.tablewrap{overflow-x:auto}.tablewrap table{min-width:760px}.tablewrap th:last-child,.tablewrap td:last-child{position:sticky;right:0;background:#fff;z-index:2;box-shadow:-3px 0 6px rgba(0,0,0,.08)}.tablewrap th:last-child{z-index:3;background:#f9fafb}.timeEdit{width:92px;min-width:92px;padding:8px 6px}.recordSaveBtn{white-space:nowrap}}
+
+#inTime,#outTime{font-variant-numeric:tabular-nums;letter-spacing:.5px}
