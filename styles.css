@@ -4,3 +4,5 @@
 @media(max-width:700px){.tablewrap{overflow-x:auto}.tablewrap table{min-width:760px}.tablewrap th:last-child,.tablewrap td:last-child{position:sticky;right:0;background:#fff;z-index:2;box-shadow:-3px 0 6px rgba(0,0,0,.08)}.tablewrap th:last-child{z-index:3;background:#f9fafb}.timeEdit{width:92px;min-width:92px;padding:8px 6px}.recordSaveBtn{white-space:nowrap}}
 
 #inTime,#outTime{font-variant-numeric:tabular-nums;letter-spacing:.5px}
+
+@media(max-width:700px){#gateView #saveBtn{position:fixed;left:10px;right:10px;bottom:10px;width:calc(100% - 20px);z-index:20;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.18)}#gateView .card{padding-bottom:90px}}
