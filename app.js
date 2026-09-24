@@ -100,17 +100,30 @@ async function loadRecords(){
     const rec=recordMap.get(ds),status=attMap.get(ds)||(holidayMap.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
     const dow=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
     if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
-    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td>'+(rec?'<button class="secondary" onclick="editRecord(\''+rec.id+'\',\''+rec.in_time.slice(0,5)+'\',\''+rec.out_time.slice(0,5)+'\')">Edit</button>':'')+'</td></tr>';
+    html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+(rec?rec.in_time.slice(0,5):'')+'</td><td>'+(rec?rec.out_time.slice(0,5):'')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary" onclick="editRecord('+(rec?'\\''+rec.id+'\\'':'null')+',\\''+(rec?rec.in_time.slice(0,5):'')+'\\',\\''+(rec?rec.out_time.slice(0,5):'')+'\\',\\''+ds+'\\',\\''+current+'\\',\\''+emp.category+'\\')">'+(rec?'Edit':'Add')+'</button></td></tr>';
   }
   $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
   $('recordSummary').textContent=emp.name+' | '+emp.category+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
 }
-window.editRecord=async(id,inTime,outTime)=>{
-  const ni=prompt('First IN time',inTime),no=prompt('Last OUT time',outTime);
+window.editRecord=async(id,inTime,outTime,date,employeeId,category)=>{
+  const ni=prompt('First IN time',inTime||'9:00'),no=prompt('Last OUT time',outTime||'5:45');
   if(!ni||!no)return;
-  const {error}=await db.from('daily_records').update({in_time:ni.length===5?ni+':00':ni,out_time:no.length===5?no+':00':no}).eq('id',id);
-  if(error)alert(error.message);else await loadRecords();
+  const in_time=ni.length===5?ni+':00':ni,out_time=no.length===5?no+':00':no;
+  let result;
+  if(id){
+    result=await db.from('daily_records').update({in_time,out_time}).eq('id',id);
+  }else{
+    const rule=rules.find(r=>r.category===category);
+    result=await db.from('daily_records').insert({
+      client_id:crypto.randomUUID(),work_date:date,employee_id:employeeId,in_time,out_time,
+      break_minutes:rule?.break_minutes??0,
+      normal_work_minutes:rule?.normal_work_minutes??525,
+      ot_eligible:rule?.ot_eligible??false,
+      ot_threshold_minutes:rule?.ot_threshold_minutes??15
+    });
+  }
+  if(result.error)alert(result.error.message);else await loadRecords();
 };
 
 function downloadCSV(name,rows){
