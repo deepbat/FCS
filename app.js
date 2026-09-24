@@ -118,9 +118,19 @@ function downloadCSV(name,rows){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name;a.click();URL.revokeObjectURL(a.href);
 }
 async function exportRecords(){
-  const m=$('monthFilter').value||monthNow(),{start,end}=monthRange(m);
-  const {data}=await db.from('daily_records').select('work_date,in_time,out_time,worked_minutes,ot_minutes,employees(name,category)').gte('work_date',start).lt('work_date',end).order('work_date');
-  downloadCSV('FCS-Overtime-'+m+'.csv',[['Date','Employee','Category','IN','OUT','Worked','OT'],...(data||[]).map(r=>[r.work_date,r.employees?.name,r.employees?.category,r.in_time.slice(0,5),r.out_time.slice(0,5),fmtMin(r.worked_minutes),fmtMin(r.ot_minutes)])]);
+  const m=$('monthFilter').value||monthNow(),{start,end}=monthRange(m),employeeId=$('recordEmployee').value;
+  const [{data:emp},{data}]=await Promise.all([
+    db.from('employees').select('name,category').eq('id',employeeId).single(),
+    db.from('daily_records').select('work_date,in_time,out_time,worked_minutes,ot_minutes').eq('employee_id',employeeId).gte('work_date',start).lt('work_date',end).order('work_date')
+  ]);
+  const map=new Map((data||[]).map(r=>[r.work_date,r])),d=new Date(start+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
+  const rows=[['Employee',emp?.name||''],['Category',emp?.category||''],['Month',m],[],['Date','Day','IN','OUT','Worked','OT']];
+  for(let day=1;day<=days;day++){
+    const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0'),r=map.get(ds);
+    rows.push([ds,new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'}),r?.in_time?.slice(0,5)||'',r?.out_time?.slice(0,5)||'',r?fmtMin(r.worked_minutes):'',r?fmtMin(r.ot_minutes):'']);
+  }
+  rows.push([],['Total OT',fmtMin((data||[]).reduce((n,r)=>n+(Number(r.ot_minutes)||0),0))]);
+  downloadCSV('FCS-OT-Register-'+(emp?.name||'Employee')+'-'+m+'.csv',rows);
 }
 
 async function loadEmployeesAdmin(){
