@@ -222,10 +222,11 @@ async function loadAttendance(){
       const selected=existing?.status||defaultStatus;
       html+='<tr><td>'+ds+'</td><td>'+esc(e.name)+'</td><td><select id="a-'+ds+'-'+e.id+'">'+
         '<option></option>'+statuses.map(s=>'<option '+(selected===s?'selected':'')+'>'+s+'</option>').join('')+
-        '</select></td><td><button class="secondary" onclick="saveAttendance(\\''+ds+'\\',\\''+e.id+'\\')">Save</button></td></tr>';
+        '</select></td><td><button class="secondary attendanceSaveBtn" data-date="'+ds+'" data-eid="'+e.id+'">Save</button></td></tr>';
     }
   }
   $('attendanceTable').innerHTML=html;
+  document.querySelectorAll('.attendanceSaveBtn').forEach(btn=>btn.onclick=()=>saveAttendance(btn.dataset.date,btn.dataset.eid));
 }
 window.saveAttendance=async(date,eid)=>{
   const status=$('a-'+date+'-'+eid).value;if(!status)return;
