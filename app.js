@@ -3,6 +3,28 @@ const SUPABASE_KEY='sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function normalizeTime(v){
+  v=String(v||'').trim().toLowerCase().replace(/\s+/g,'');
+  const m=v.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+  if(m){
+    let h=Number(m[1]),min=Number(m[2]);
+    if(min>59)return '';
+    if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12;}
+    else if(h>23)return '';
+    return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');
+  }
+  const d=v.match(/^(\d{1,2})(\d{2})$/);
+  if(d){const h=Number(d[1]),min=Number(d[2]);if(h<=23&&min<=59)return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');}
+  if(/^\d{1,2}$/.test(v)){const h=Number(v);if(h<=23)return String(h).padStart(2,'0')+':00';}
+  return '';
+}
+function setupTimeInput(id,defaultValue){
+  const el=$(id);if(!el)return;
+  el.value=defaultValue||'';
+  el.inputMode='numeric';
+  el.autocomplete='off';
+  el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});
+}
 const fmtMin=m=>{m=Math.max(0,Math.round(Number(m)||0));return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'};
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const monthNow=()=>today().slice(0,7);
@@ -47,14 +69,14 @@ async function loadRules(){
 }
 
 async function saveGate(){
-  const work_date=$('workDate').value,employee_id=$('employee').value,in_time=$('inTime').value,out_time=$('outTime').value;
+  const work_date=$('workDate').value,employee_id=$('employee').value,in_time=normalizeTime($('inTime').value),out_time=normalizeTime($('outTime').value);
   if(!work_date||!employee_id||!in_time||!out_time){$('message').textContent='Please enter date, employee, IN and OUT.';return}
   const emp=employees.find(e=>e.id===employee_id),rule=rules.find(r=>r.category===emp?.category);
   const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:rule?.break_minutes??0,normal_work_minutes:rule?.normal_work_minutes??525,ot_eligible:rule?.ot_eligible??false,ot_threshold_minutes:rule?.ot_threshold_minutes??15};
   $('saveBtn').disabled=true;$('message').textContent='Saving...';
   const {error}=await db.from('daily_records').insert(row);
   if(!error){
-    $('message').textContent='Saved successfully';$('inTime').value='';$('outTime').value='';await updatePending();$('saveBtn').disabled=false;return;
+    $('message').textContent='Saved successfully';$('inTime').value='09:00';$('outTime').value='';await updatePending();$('saveBtn').disabled=false;return;
   }
   if(error.code==='23505'){$('message').textContent='This employee already has a record for this date.';$('saveBtn').disabled=false;return}
   await localPut(row);await updatePending();$('message').textContent='Saved on phone. It will sync when internet is available.';$('saveBtn').disabled=false;
@@ -246,7 +268,7 @@ function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
 
-$('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceMonth').value=monthNow();
+$('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceMonth').value=monthNow();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('exportAttendance').onclick=exportAttendance;
