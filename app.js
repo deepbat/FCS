@@ -194,7 +194,7 @@ async function loadAttendance(){
   const [{data:emps},{data:att},{data:hols},{data:records}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).order('name'),
     db.from('attendance').select('*').gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('*').gte('holiday_date',start).lt('work_date',end),
+    db.from('holidays').select('*').gte('holiday_date',start).lt('holiday_date',end),
     db.from('daily_records').select('work_date,employee_id,in_time,out_time').gte('work_date',start).lt('work_date',end)
   ]);
   const map=new Map((att||[]).map(x=>[x.work_date+'|'+x.employee_id,x]));
