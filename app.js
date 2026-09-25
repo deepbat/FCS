@@ -167,7 +167,7 @@ async function loadRecords(){
   const date=$('recordDate').value||today();
   const [{data:emps,error:empError},{data:rows,error:rowError},{data:att},{data:hols}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
+    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
     db.from('attendance').select('work_date,employee_id,status').eq('work_date',date),
     db.from('holidays').select('holiday_date,name').eq('holiday_date',date)
   ]);
@@ -185,6 +185,20 @@ async function loadRecords(){
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     let status=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
+    if(rec&&!status){
+      const inMin=timeMinutes(rec.in_time);
+      const outMin=timeMinutes(rec.out_time);
+      const elapsed=Number(rec.total_elapsed_minutes);
+      if(emp.category==='Staff'){
+        if(inMin!==null&&outMin!==null){
+          if(inMin<=9*60+30&&outMin<=13*60+15) status='Second Half Leave';
+          else if(inMin>=13*60+45&&outMin>=17*60+15) status='First Half Leave';
+          else if(inMin<=9*60+30&&outMin>=17*60+15) status='Present';
+        }
+      }else if(elapsed>=Number(emp.normal_work_minutes||0)){
+        status='Present';
+      }
+    }
     if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
