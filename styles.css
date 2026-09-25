@@ -213,3 +213,15 @@
   #attendanceReportTab th:nth-child(n+4),#attendanceReportTab td:nth-child(n+4){width:9.7%;text-align:center}
   #attendanceReportTab .reportTotal td{font-weight:700;background:#e5e7eb!important}
 }
+#reportsTab .employeeHeading th{background:#fff;text-align:left;font-size:14px;padding-top:12px}
+#reportsTab .reportSubtotal td{font-weight:700;background:#f1f3f5}
+#reportsTab .reportGrandTotal td{font-weight:700;background:#e5e7eb;text-align:center}
+@media print{
+  #reportsTab .tablewrap table{min-width:0!important;width:100%!important;table-layout:fixed!important}
+  #reportsTab th,#reportsTab td{font-size:9px!important;padding:3px 5px!important;height:auto!important}
+  #reportsTab th:nth-child(1),#reportsTab td:nth-child(1){width:60%;text-align:left}
+  #reportsTab th:nth-child(2),#reportsTab td:nth-child(2){width:20%;text-align:center}
+  #reportsTab th:nth-child(3),#reportsTab td:nth-child(3){width:20%;text-align:center}
+  #reportsTab .employeeHeading th{font-size:11px!important;padding-top:8px!important}
+  #reportsTab .reportSubtotal td,#reportsTab .reportTotal td,#reportsTab .reportGrandTotal td{font-weight:700}
+}
