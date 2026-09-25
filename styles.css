@@ -6,3 +6,39 @@
 #inTime,#outTime{font-variant-numeric:tabular-nums;letter-spacing:.5px}
 
 @media(max-width:700px){#gateView #saveBtn{position:fixed;left:10px;right:10px;bottom:10px;width:calc(100% - 20px);z-index:20;margin:0;box-shadow:0 2px 8px rgba(0,0,0,.18)}#gateView .card{padding-bottom:90px}}
+
+/* Admin spreadsheet layout */
+#adminView{max-width:1180px}
+#adminView .adminHead{margin-bottom:10px;padding:4px 0}
+#adminView .adminHead h2{font-size:24px;margin:0}
+#adminView .tabs{gap:0;border-bottom:1px solid #c7cdd4;margin:0 0 10px;overflow-x:auto}
+#adminView .tab{border:1px solid #c7cdd4;border-bottom:0;border-radius:0;background:#eef1f4;padding:8px 18px;margin:0 2px 0 0}
+#adminView .tab.active{background:#fff;color:#111827;font-weight:700;position:relative;bottom:-1px}
+#adminView .toolbar{background:#f4f6f8;border:1px solid #c7cdd4;padding:7px;margin-bottom:0;border-radius:0}
+#adminView .toolbar input,#adminView .toolbar select,#adminView .toolbar button{height:36px;border-radius:3px;padding:7px 10px}
+#adminView .toolbar input,#adminView .toolbar select{border-color:#aeb6c0}
+#adminView .summary{background:#fff;border-left:1px solid #c7cdd4;border-right:1px solid #c7cdd4;margin:0;padding:8px 10px;font-weight:700}
+#adminView .tablewrap{border:1px solid #c7cdd4;border-radius:0;background:#fff}
+#adminView .tablewrap table{min-width:760px;border-collapse:collapse}
+#adminView th,#adminView td{border-right:1px solid #d8dde3;border-bottom:1px solid #d8dde3;padding:6px 8px;height:34px;font-size:13px}
+#adminView th{background:#e9edf2;color:#111827;font-weight:700;border-top:1px solid #c7cdd4}
+#adminView tr:hover td{background:#f7f9fb}
+#adminView td input,#adminView td select{border:1px solid transparent;border-radius:0;padding:5px 6px;height:30px;background:transparent}
+#adminView td input:focus,#adminView td select:focus{border:1px solid #7aa7e8;background:#fff;outline:none}
+#adminView .timeEdit{width:82px;min-width:82px}
+#adminView .secondary{border:1px solid #c4cad2;border-radius:3px;background:#eef1f4;padding:6px 10px}
+#adminView .card{border:1px solid #c7cdd4;border-radius:0;box-shadow:none;padding:12px;margin-bottom:10px}
+#adminView .card h3{font-size:16px}
+#adminView .formgrid{gap:0}
+#adminView .formgrid input,#adminView .formgrid select{border-radius:0;border-color:#c7cdd4}
+#adminView .formgrid button.primary,#adminView #saveRules{width:auto;border-radius:3px;margin-top:8px}
+#adminView .rule{border-bottom:1px solid #d8dde3;padding:4px 0;margin:0}
+#adminView .rule input{border-radius:0;border-color:#c7cdd4}
+#adminView .recordSaveBtn,#adminView .attendanceSaveBtn{padding:5px 9px}
+@media(max-width:700px){
+  #adminView{max-width:none}
+  #adminView .adminHead{padding:0}
+  #adminView .toolbar{flex-wrap:nowrap;overflow-x:auto}
+  #adminView .toolbar input,#adminView .toolbar select{min-width:150px}
+  #adminView .tabs{margin-bottom:8px}
+}
