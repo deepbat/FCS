@@ -19,6 +19,7 @@ function normalizeTime(v){
   return '';
 }
 async function autoSaveEmployee(sourceEl){
+  setSaveStatus('saving');
   const row=sourceEl.closest('tr[data-employee-id]');if(!row)return;
   const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
   const date=$('recordDate')?.value;if(!date)return;
@@ -46,6 +47,7 @@ async function autoSaveEmployee(sourceEl){
     if(a.error)alert(a.error.message);
   }
   await loadRecords();
+  setSaveStatus('saved');
 }
 function normalizeTimeFields(){
   document.querySelectorAll('.timeEdit').forEach(el=>{
@@ -169,12 +171,12 @@ async function loadRecords(){
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
-    el.addEventListener('input',refreshLiveTotals);
+    el.addEventListener('input',()=>{refreshLiveTotals();setSaveStatus('unsaved')});
     el.addEventListener('blur',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
     el.addEventListener('change',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
   });
   document.querySelectorAll('#recordsTable .attendanceEdit').forEach(el=>{
-    el.addEventListener('change',async()=>{await autoSaveEmployee(el)});
+    el.addEventListener('change',async()=>{setSaveStatus('unsaved');await autoSaveEmployee(el)});
   });
   refreshLiveTotals();
 }
@@ -198,6 +200,11 @@ function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
     ?(special?rounded:(rounded-(emp.normal_work_minutes||525)>15?rounded-(emp.normal_work_minutes||525):0))
     :0;
   return {worked,ot};
+}
+function setSaveStatus(state){
+  const el=$('saveStatus');if(!el)return;
+  el.className='saveStatus '+state;
+  el.textContent=state==='unsaved'?'Unsaved changes':state==='saving'?'Saving...':'All changes saved';
 }
 function refreshLiveTotals(){
   const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;
@@ -352,8 +359,8 @@ async function saveAllChanges(){
     }
     await saveRules();
     await Promise.all([loadRecords(),loadReportOptions()]);
-    btn.textContent='Saved';setTimeout(()=>btn.textContent='Save Changes',900);
-  }catch(e){alert(e.message||'Unable to save changes.');btn.textContent='Save Changes';}
+    btn.textContent='Saved';setSaveStatus('saved');setTimeout(()=>btn.textContent='Save Changes',900);
+  }catch(e){alert(e.message||'Unable to save changes.');btn.textContent='Save Changes';setSaveStatus('unsaved');}
   finally{btn.disabled=false;}
 }
 
