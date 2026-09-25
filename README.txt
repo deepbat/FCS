@@ -114,11 +114,14 @@ For Staff:
 - It is restricted to OT-eligible employees: Driver and Gateman.
 - It shows every calendar date in selected month.
 - Each employee has:
-  Date | OT | UT
+  Date | IN | OUT | IN 2 | OUT 2 | OT | UT
+- IN 2 and OUT 2 are used for split-shift employees such as Varinder Pal.
 - Blank dates remain blank.
 - Sub total shows separate OT and UT totals.
 - Total shows combined OT + UT.
 - Employee selection can be used to include or exclude individual eligible employees.
+- Printed report is arranged so one employee occupies one page.
+- Excel export creates one worksheet/tab per employee, with worksheet named after employee.
 
 13. IMPORTANT DATA RULE
 Attendance status and timing records are separate. A timing record without an explicitly entered attendance status is treated as Present for monthly attendance reporting, unless date is a Sunday or entered holiday.
