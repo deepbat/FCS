@@ -191,3 +191,9 @@
   #reportsTab th:nth-child(6),#reportsTab td:nth-child(6){width:15%;text-align:left}
   #reportsTab .reportTotal td{font-weight:700;background:#e5e7eb!important}
 }
+
+.saveStatus{font-size:13px;color:#52606d;min-width:125px}
+.saveStatus.unsaved{color:#9a3412;font-weight:600}
+.saveStatus.saving{color:#1d4ed8;font-weight:600}
+.saveStatus.saved{color:#166534;font-weight:600}
+@media(max-width:700px){.saveStatus{min-width:auto}}
