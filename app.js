@@ -89,7 +89,7 @@ async function syncQueue(){
   if(!q.length){await updatePending();$('syncStatus').textContent='Synced';return}
   syncingQueue=true;
   $('syncStatus').textContent='Syncing...';
-  let failed=0;
+  let failed=0,firstError='';
   try{
     for(let i=0;i<q.length;i+=10){
       const batch=q.slice(i,i+10);
@@ -100,7 +100,10 @@ async function syncQueue(){
             await localDelete(row.client_id);
             return true;
           }
-        }catch{}
+          if(!firstError)firstError=(error.code?error.code+': ':'')+(error.message||'Upload failed');
+        }catch(e){
+          if(!firstError)firstError=e?.message||'Network error';
+        }
         return false;
       }));
       failed+=results.filter(x=>!x).length;
@@ -110,7 +113,11 @@ async function syncQueue(){
   }
   await updatePending();
   const pending=await localAll();
-  $('syncStatus').textContent=pending.length?(failed?'Sync pending':'Syncing...'):'Synced';
+  if(pending.length){
+    $('syncStatus').textContent=firstError?'Sync pending: '+firstError:'Sync pending';
+  }else{
+    $('syncStatus').textContent='Synced';
+  }
 }
 window.addEventListener('online',syncQueue);
 window.addEventListener('offline',()=>{$('syncStatus').textContent='Offline'});
