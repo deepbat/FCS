@@ -124,9 +124,9 @@ async function loadRecords(){
     if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     if(split){
-      html+='<tr class="splitShiftRow" data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in1-'+ds,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+ds,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
+      html+='<tr class="splitShiftRow" data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in1-'+ds,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+ds,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td></tr>';
     }else{
-      html+='<tr data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in-'+ds,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+ds,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
+      html+='<tr data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in-'+ds,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+ds,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td></tr>';
     }
   }
   $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
