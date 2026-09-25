@@ -260,11 +260,12 @@ function refreshLiveTotals(){
   let worked=0,ot=0;
   document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
     const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
-    const split=!!emp.split_shift;
-    const ni=split?$('in1-'+emp.id)?.value:$('in-'+emp.id)?.value;
-    const no=split?$('out2-'+emp.id)?.value:$('out-'+emp.id)?.value;
-    const live=calcLiveMinutes(emp,ni,no,split?'06:00':'',split?no:'',date,isHoliday);
-    const workedCell=row.children[4],otCell=row.children[5];
+    const ni=$('in-'+emp.id)?.value;
+    const no=$('out-'+emp.id)?.value;
+    const ni2=$('in2-'+emp.id)?.value;
+    const no2=$('out2-'+emp.id)?.value;
+    const live=calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday);
+    const workedCell=row.children[6],otCell=row.children[7];
     workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
     otCell.textContent=live.ot==null?'':fmtMin(live.ot);
     if(live.worked!=null)worked+=live.worked;
