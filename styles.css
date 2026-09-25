@@ -46,3 +46,18 @@
 #adminView .adminActions{display:flex;align-items:center;gap:8px}
 #adminView .adminSave{width:auto;margin:0;border-radius:3px;padding:9px 14px}
 @media(max-width:700px){#adminView .adminActions{gap:5px}#adminView .adminSave{padding:8px 10px}}
+
+/* Monthly report */
+#reportsTab .toolbar{margin-bottom:0}
+#reportsTab .toolbar input,#reportsTab .toolbar select{max-width:none}
+#reportsTab .reportTotal td{font-weight:700;background:#eef1f4}
+#reportsTab .tablewrap table{min-width:760px}
+@media print{
+  body{font-size:10px}
+  #adminView{max-width:none}
+  #reportsTab .reportTotal td{font-weight:700}
+  #reportsTab .tablewrap table{width:100%;min-width:0;table-layout:auto}
+  #reportsTab th,#reportsTab td{font-size:9px;padding:3px 4px;white-space:nowrap}
+  #reportsTab .summary{font-size:9px;padding:4px}
+}
+@page{size:A4 landscape;margin:8mm}
