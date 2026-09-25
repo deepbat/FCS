@@ -153,104 +153,82 @@ async function exportRecords(){
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
 }
 
-async function loadReportOptions(){
-  const {data,error}=await db.from('employees').select('id,name,category,split_shift').eq('active',true).order('name');
-  if(error){$('reportTable').innerHTML='<tr><td>'+esc(error.message)+'</td></tr>';return}
-  const current=$('reportEmployee').value;
-  $('reportEmployee').innerHTML=(data||[]).map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+esc(e.category)+')</option>').join('');
-  if(current && (data||[]).some(e=>e.id===current)) $('reportEmployee').value=current;
-  else if((data||[]).length) $('reportEmployee').value=data[0].id;
-  $('reportMonth').value=monthNow();
-}
-
-async function getMonthlyReportData(){
+async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
-  const employeeId=$('reportEmployee').value;
-  if(!employeeId) throw new Error('Please select an employee.');
   const {start,end}=monthRange(month);
-  const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
-    db.from('employees').select('id,name,category,split_shift').eq('id',employeeId).single(),
-    db.from('daily_records').select('work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes').eq('employee_id',employeeId).gte('work_date',start).lt('work_date',end),
-    db.from('attendance').select('work_date,status').eq('employee_id',employeeId).gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
+  const [{data:emps,error:empError},{data:records,error:recError}]=await Promise.all([
+    db.from('employees').select('id,name,category').eq('active',true).order('name'),
+    db.from('daily_records').select('work_date,employee_id,ot_minutes').gte('work_date',start).lt('work_date',end)
   ]);
-  const err=empError||recError||attError||holError;
-  if(err) throw new Error(err.message);
-  const recMap=new Map((records||[]).map(r=>[r.work_date,r]));
-  const attMap=new Map((att||[]).map(a=>[a.work_date,a.status]));
-  const holidayMap=new Map((hols||[]).map(h=>[h.holiday_date,h.name]));
-  const d=new Date(start+'T00:00:00');
-  const days=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-  const rows=[];
-  let totalWorked=0,totalOt=0;
-  const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
-  for(let n=1;n<=days;n++){
-    const date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');
-    const day=new Date(date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
-    const rec=recMap.get(date);
-    let status=attMap.get(date)||(holidayMap.has(date)?'Holiday':(new Date(date+'T00:00:00').getDay()===0?'Sunday':''));
-    if(status in counts) counts[status]++;
-    if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
-    rows.push({date,day,rec,status});
-  }
-  return {month,employee:emps,rows,totalWorked,totalOt,counts};
+  const err=empError||recError;
+  if(err)throw new Error(err.message);
+  const otMap=new Map();
+  for(const r of records||[])otMap.set(r.employee_id,(otMap.get(r.employee_id)||0)+(Number(r.ot_minutes)||0));
+  return {month,emps:emps||[],otMap};
 }
 
-function reportHtml(data){
-  const split=!!data.employee.split_shift;
-  const headers=split
-    ? ['Date','Day','IN 1','OUT 1','IN 2','OUT 2','Worked','OT','Attendance']
-    : ['Date','Day','IN','OUT','Worked','OT','Attendance'];
-  let out='<tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
-  for(const r of data.rows){
-    const x=r.rec||{};
-    const cells=split
-      ? [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.in_time_2?.slice(0,5)||'',x.out_time_2?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]
-      : [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status];
-    out+='<tr>'+cells.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>';
-  }
-  const totalCells=split
-    ? ['','','','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt), '']
-    : ['','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),''];
-  out+='<tr class="reportTotal">'+totalCells.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>';
+async function loadReportOptions(){
+  try{
+    const base=await getOTReportBase();
+    $('reportMonth').value=base.month;
+    const checked=base.emps.filter(e=>(base.otMap.get(e.id)||0)>0).map(e=>e.id);
+    $('reportPeople').innerHTML=base.emps.map(e=>{
+      const ot=base.otMap.get(e.id)||0;
+      return '<label class="reportPerson"><input type="checkbox" class="reportEmployeeCheck" value="'+e.id+'" '+(ot>0?'checked':'')+'><span>'+esc(e.name)+' ('+esc(e.category)+')</span><small>'+fmtMin(ot)+'</small></label>';
+    }).join('');
+  }catch(e){$('reportPeople').innerHTML='<span class="muted">'+esc(e.message||'Unable to load employees.')+'</span>'}
+}
+
+async function getOTReportData(){
+  const base=await getOTReportBase();
+  const selected=[...document.querySelectorAll('.reportEmployeeCheck:checked')].map(x=>x.value);
+  if(!selected.length)throw new Error('Please select at least one employee.');
+  const {start,end}=monthRange(base.month);
+  const {data:records,error}=await db.from('daily_records').select('work_date,employee_id,ot_minutes').gte('work_date',start).lt('work_date',end);
+  if(error)throw new Error(error.message);
+  const employees=base.emps.filter(e=>selected.includes(e.id));
+  const rows=employees.map((e,i)=>{
+    const mins=(records||[]).filter(r=>r.employee_id===e.id).reduce((s,r)=>s+(Number(r.ot_minutes)||0),0);
+    return {no:i+1,employee:e,minutes:mins};
+  }).filter(r=>r.minutes>0 || !$('otOnly').checked);
+  return {month:base.month,rows};
+}
+
+function otReportHtml(data){
+  let out='<tr><th>S. No.</th><th>Name</th><th colspan="2">P.I.</th><th>Night duty Allowance for duty performed at City Office @ Rs. 50/- per night</th><th>Remarks</th></tr>';
+  out+='<tr class="subhead"><th></th><th></th><th>Hours</th><th>Min.</th><th></th><th></th></tr>';
+  let total=0;
+  data.rows.forEach((r,i)=>{
+    total+=r.minutes;
+    out+='<tr><td>'+r.no+'.</td><td>'+esc('Mr. '+r.employee.name)+'</td><td>'+Math.floor(r.minutes/60)+'</td><td>'+String(r.minutes%60).padStart(2,'0')+'</td><td></td><td></td></tr>';
+  });
+  out+='<tr class="reportTotal"><td></td><td>Total</td><td>'+Math.floor(total/60)+'</td><td>'+String(total%60).padStart(2,'0')+'</td><td></td><td></td></tr>';
   return out;
 }
 
 async function generateReport(){
   const btn=$('generateReport');btn.disabled=true;btn.textContent='Loading...';
   try{
-    const data=await getMonthlyReportData();
+    const data=await getOTReportData();
     const label=new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
-    $('reportTitle').textContent=data.employee.name+' | '+data.employee.category+' | '+label;
-    const c=data.counts;
-    $('reportSummary').textContent='Present '+c.Present+' | 1st Half Leave '+c['First Half Leave']+' | 2nd Half Leave '+c['Second Half Leave']+' | Full Day Leave '+c['Full Day Leave']+' | Sundays '+c.Sunday+' | Holidays '+c.Holiday+' | Total Worked '+fmtMin(data.totalWorked)+' | Total OT '+fmtMin(data.totalOt);
-    $('reportTable').innerHTML=reportHtml(data);
-  }catch(e){
-    $('reportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>';
-  }finally{
-    btn.disabled=false;btn.textContent='Generate';
-  }
+    $('reportTitle').textContent='DATA FOR WAGES COMPUTATION - CITY OFFICE';
+    $('reportSummary').textContent='PERIOD '+data.month.slice(5,7)+'/01/'+data.month.slice(0,4)+' to '+new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit',year:'numeric'}); 
+    $('reportTable').innerHTML=otReportHtml(data);
+  }catch(e){$('reportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>'}
+  finally{btn.disabled=false;btn.textContent='Generate'}
 }
 
 async function exportReport(){
   try{
-    const data=await getMonthlyReportData();
-    const split=!!data.employee.split_shift;
-    const headers=split
-      ? ['Date','Day','IN 1','OUT 1','IN 2','OUT 2','Worked','OT','Attendance']
-      : ['Date','Day','IN','OUT','Worked','OT','Attendance'];
-    const rows=[headers];
+    const data=await getOTReportData();
+    const rows=[['S. No.','Name','P.I. Hours','P.I. Min.','Night duty Allowance for duty performed at City Office @ Rs. 50/- per night','Remarks']];
+    let total=0;
     for(const r of data.rows){
-      const x=r.rec||{};
-      rows.push(split
-        ? [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.in_time_2?.slice(0,5)||'',x.out_time_2?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]
-        : [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]);
+      total+=r.minutes;
+      rows.push([r.no,'Mr. '+r.employee.name,Math.floor(r.minutes/60),String(r.minutes%60).padStart(2,'0'),'','']);
     }
-    const total=split
-      ? ['','','','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),'']
-      : ['','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),''];
-    rows.push(total);
-    downloadCSV('FCS-Monthly-Report-'+data.employee.name.replace(/[^a-z0-9]+/gi,'-')+'-'+data.month+'.csv',rows);
+    rows.push(['','Total',Math.floor(total/60),String(total%60).padStart(2,'0'),'','']);
+    downloadCSV('FCS-OT-Report-'+data.month+'.csv',rows);
   }catch(e){alert(e.message||'Unable to export report.')}
 }
 
@@ -351,7 +329,7 @@ $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=generateReport;$('reportEmployee').onchange=generateReport;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('otOnly').onchange=loadReportOptions;setupTabs();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
