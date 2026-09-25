@@ -104,8 +104,16 @@ async function loadEmployees(){
   if(error){loadCache();renderGateEmployees();return}
   employees=data||[];saveCache();renderGateEmployees();
 }
+function updateGateSplitFields(){
+  const emp=employees.find(e=>e.id===$('employee')?.value);
+  const split=!!emp?.split_shift;
+  $('gateSplitFields')?.classList.toggle('hidden',!split);
+  if($('inTimeLabel'))$('inTimeLabel').textContent=split?'First IN':'IN';
+  if($('outTimeLabel'))$('outTimeLabel').textContent=split?'First OUT':'OUT';
+}
 function renderGateEmployees(){
   $('employee').innerHTML=employees.length?employees.map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+esc(e.category)+')</option>').join(''):'<option value="">No employees added yet</option>';
+  updateGateSplitFields();
 }
 async function loadRules(){
   const {data,error}=await db.from('category_rules').select('*').order('category');
@@ -125,15 +133,20 @@ function effectiveRule(emp){
 }
 
 async function saveGate(){
-  const work_date=$('workDate').value,employee_id=$('employee').value,in_time=normalizeTime($('inTime').value),out_time=normalizeTime($('outTime').value);
+  const work_date=$('workDate').value,employee_id=$('employee').value;
+  const in_time=normalizeTime($('inTime').value),out_time=normalizeTime($('outTime').value);
+  const in_time_2=normalizeTime($('inTime2')?.value),out_time_2=normalizeTime($('outTime2')?.value);
+  const emp=employees.find(e=>e.id===employee_id);
+  const split=!!emp?.split_shift;
   if(!work_date||!employee_id||!in_time||!out_time){$('message').textContent='Please enter date, employee, IN and OUT.';return}
-  const emp=employees.find(e=>e.id===employee_id),rule=rules.find(r=>r.category===emp?.category);
+  if(split&&((in_time_2&&!out_time_2)||(!in_time_2&&out_time_2))){$('message').textContent='Please enter both IN 2 and OUT 2.';return}
+  if(!split&&(in_time_2||out_time_2)){$('message').textContent='Second-shift times are only for split-shift employees.';return}
   const er=effectiveRule(emp);
-  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
+  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',in_time_2:split?(in_time_2?in_time_2+':00':null):null,out_time_2:split?(out_time_2?out_time_2+':00':null):null,break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
   $('saveBtn').disabled=true;$('message').textContent='Saving...';
   const {error}=await db.from('daily_records').insert(row);
   if(!error){
-    $('message').textContent='Saved successfully';$('inTime').value='09:00';$('outTime').value='';await updatePending();$('saveBtn').disabled=false;return;
+    $('message').textContent='Saved successfully';$('inTime').value='09:00';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value='';await updatePending();$('saveBtn').disabled=false;return;
   }
   if(error.code==='23505'){$('message').textContent='This employee already has a record for this date.';$('saveBtn').disabled=false;return}
   await localPut(row);await updatePending();$('message').textContent='Saved on phone. It will sync when internet is available.';$('saveBtn').disabled=false;
@@ -617,7 +630,8 @@ function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
 
-$('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
+$('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');setupTimeInput('inTime2','');setupTimeInput('outTime2','');
+$('employee').onchange=()=>{updateGateSplitFields();$('inTime').value='09:00';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value=''};
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
