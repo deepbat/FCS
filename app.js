@@ -167,7 +167,7 @@ async function loadRecords(){
   const date=$('recordDate').value||today();
   const [{data:emps,error:empError},{data:rows,error:rowError},{data:att},{data:hols}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
+    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
     db.from('attendance').select('work_date,employee_id,status').eq('work_date',date),
     db.from('holidays').select('holiday_date,name').eq('holiday_date',date)
   ]);
@@ -178,6 +178,7 @@ async function loadRecords(){
   const list=emps||[], recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
   const attMap=new Map((att||[]).map(x=>[x.employee_id,x.status]));
   const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
+  const autoAttendance=[];
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
@@ -185,7 +186,30 @@ async function loadRecords(){
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     let status=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
-    if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
+    if(rec){
+      totalWorked+=Number(rec.worked_minutes)||0;
+      totalOt+=Number(rec.ot_minutes)||0;
+      if(!attMap.has(emp.id)&&!holiday&&dow!==0){
+        const ni=rec.in_time?.slice(0,5)||'', no=rec.out_time?.slice(0,5)||'';
+        const im=timeMinutes(ni), om=timeMinutes(no);
+        let auto='';
+        if(emp.category==='Staff'){
+          if(im!==null&&om!==null){
+            if(im<=570&&om<=795) auto='Second Half Leave';
+            else if(im>=825&&om>=1035) auto='First Half Leave';
+            else if(im<=570&&om>=1035) auto='Present';
+          }
+        }else{
+          const normalElapsed=Number(emp.normal_work_minutes)||525;
+          const elapsed=Number(rec.total_elapsed_minutes);
+          if(Number.isFinite(elapsed)&&elapsed>=normalElapsed) auto='Present';
+        }
+        if(auto){
+          status=auto;
+          autoAttendance.push({work_date:date,employee_id:emp.id,status:auto});
+        }
+      }
+    }
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
@@ -209,8 +233,11 @@ async function loadRecords(){
     el.addEventListener('change',async()=>{setSaveStatus('unsaved');await autoSaveEmployee(el)});
   });
   refreshLiveTotals();
+  if(autoAttendance.length){
+    const {error}=await db.from('attendance').upsert(autoAttendance,{onConflict:'work_date,employee_id'});
+    if(error) console.error('Automatic attendance save failed:',error);
+  }
 }
-
 function timeMinutes(v){
   const t=normalizeTime(v);if(!t)return null;
   const [h,m]=t.split(':').map(Number);return h*60+m;
