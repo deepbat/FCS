@@ -181,11 +181,15 @@ async function loadRecords(){
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
+  const autoAttendance=[];
   let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
+
   for(const emp of list){
     const rec=recordMap.get(emp.id);
-    let status=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
-    if(rec&&!status){
+    const explicitStatus=attMap.get(emp.id)||'';
+    let status=explicitStatus||(holiday?'Holiday':(dow===0?'Sunday':''));
+
+    if(rec&&!explicitStatus&&!holiday&&dow!==0){
       const inMin=timeMinutes(rec.in_time);
       const outMin=timeMinutes(rec.out_time);
       const elapsed=Number(rec.total_elapsed_minutes);
@@ -200,22 +204,34 @@ async function loadRecords(){
         const normalElapsed=Number(rule?.normal_work_minutes||emp.normal_work_minutes||525);
         if(elapsed>=normalElapsed)status='Present';
       }
+      if(status)autoAttendance.push({work_date:date,employee_id:emp.id,status});
     }
+
     if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
+
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
+
     if(emp.split_shift){
       html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+input('in1-'+emp.id,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+emp.id,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
     }else{
       html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+input('in-'+emp.id,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+emp.id,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
     }
   }
+
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
   $('recordSummary').textContent=fmtDate(date)+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
+
+  if(autoAttendance.length){
+    const results=await Promise.all(autoAttendance.map(x=>db.from('attendance').upsert(x,{onConflict:'work_date,employee_id'})));
+    const failed=results.find(r=>r.error);
+    if(failed)console.warn('Automatic attendance save failed:',failed.error.message);
+  }
+
   document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
     el.addEventListener('input',()=>{refreshLiveTotals();setSaveStatus('unsaved')});
     el.addEventListener('blur',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
@@ -226,7 +242,6 @@ async function loadRecords(){
   });
   refreshLiveTotals();
 }
-
 function timeMinutes(v){
   const t=normalizeTime(v);if(!t)return null;
   const [h,m]=t.split(':').map(Number);return h*60+m;
