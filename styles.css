@@ -42,3 +42,7 @@
   #adminView .toolbar input,#adminView .toolbar select{min-width:150px}
   #adminView .tabs{margin-bottom:8px}
 }
+
+#adminView .adminActions{display:flex;align-items:center;gap:8px}
+#adminView .adminSave{width:auto;margin:0;border-radius:3px;padding:9px 14px}
+@media(max-width:700px){#adminView .adminActions{gap:5px}#adminView .adminSave{padding:8px 10px}}
