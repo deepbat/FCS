@@ -400,13 +400,6 @@ function fmtHHMM(mins){
   if(mins==null||mins<=0)return '';
   return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 }
-function utMinutesForRecord(record,holidaySet){
-  if(!record||holidaySet.has(record.work_date))return 0;
-  const inMin=minutesFromHHMM(record.in_time);
-  const earlyCutoff=8*60+40;
-  const normalStart=9*60;
-  return inMin!=null&&inMin<earlyCutoff?normalStart-inMin:0;
-}
 async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
