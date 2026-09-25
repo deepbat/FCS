@@ -130,8 +130,8 @@
   #reportsTab td{
     border:1px solid #777!important;
     padding:2px 3px!important;
-    height:6.6mm!important;
-    font-size:7.5px!important;
+    height:5.6mm!important;
+    font-size:7px!important;
     line-height:1.05!important;
     white-space:nowrap;
     overflow:hidden;
@@ -164,6 +164,6 @@
   }
 
   #reportsTab .tablewrap{
-    page-break-inside:avoid;
+    page-break-inside:auto;
   }
 }
