@@ -70,7 +70,11 @@ async function syncQueue(){
       const results=await Promise.all(batch.map(async row=>{
         try{
           const {error}=await db.from('daily_records').insert(row);
-          if(!error||error.code==='23505'){
+          if(!error){
+            await localDelete(row.client_id);
+            return true;
+          }
+          if(error.code==='23505' && /client_id/i.test(error.message||'')){
             await localDelete(row.client_id);
             return true;
           }
