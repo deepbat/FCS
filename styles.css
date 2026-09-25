@@ -207,9 +207,9 @@
   #attendanceReportTab .tablewrap{overflow:visible!important;border:1px solid #555}
   #attendanceReportTab .tablewrap table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse}
   #attendanceReportTab th,#attendanceReportTab td{border:1px solid #777!important;padding:4px!important;font-size:8px!important;line-height:1.1!important;white-space:normal}
-  #attendanceReportTab th:nth-child(1),#attendanceReportTab td:nth-child(1){width:5%;text-align:center}
-  #attendanceReportTab th:nth-child(2),#attendanceReportTab td:nth-child(2){width:18%;text-align:left}
-  #attendanceReportTab th:nth-child(3),#attendanceReportTab td:nth-child(3){width:9%;text-align:center}
-  #attendanceReportTab th:nth-child(n+4),#attendanceReportTab td:nth-child(n+4){text-align:center}
+  #attendanceReportTab th:nth-child(1),#attendanceReportTab td:nth-child(1){width:7%;text-align:center}
+  #attendanceReportTab th:nth-child(2),#attendanceReportTab td:nth-child(2){width:23%;text-align:left}
+  #attendanceReportTab th:nth-child(3),#attendanceReportTab td:nth-child(3){width:12%;text-align:center}
+  #attendanceReportTab th:nth-child(n+4),#attendanceReportTab td:nth-child(n+4){width:9.7%;text-align:center}
   #attendanceReportTab .reportTotal td{font-weight:700;background:#e5e7eb!important}
 }
