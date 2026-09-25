@@ -154,70 +154,104 @@ async function exportRecords(){
 }
 
 async function loadReportOptions(){
-  const {data}=await db.from('employees').select('id,name,category').eq('active',true).order('name');
+  const {data,error}=await db.from('employees').select('id,name,category,split_shift').eq('active',true).order('name');
+  if(error){$('reportTable').innerHTML='<tr><td>'+esc(error.message)+'</td></tr>';return}
   const current=$('reportEmployee').value;
-  $('reportEmployee').innerHTML='<option value="">All Employees</option>'+(data||[]).map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+esc(e.category)+')</option>').join('');
-  if(current) $('reportEmployee').value=current;
+  $('reportEmployee').innerHTML=(data||[]).map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+esc(e.category)+')</option>').join('');
+  if(current && (data||[]).some(e=>e.id===current)) $('reportEmployee').value=current;
+  else if((data||[]).length) $('reportEmployee').value=data[0].id;
   $('reportMonth').value=monthNow();
 }
 
-async function generateReport(){
-  const month=$('reportMonth').value||monthNow(), employeeId=$('reportEmployee').value;
+async function getMonthlyReportData(){
+  const month=$('reportMonth').value||monthNow();
+  const employeeId=$('reportEmployee').value;
+  if(!employeeId) throw new Error('Please select an employee.');
   const {start,end}=monthRange(month);
-  const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError}]=await Promise.all([
-    db.from('employees').select('id,name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,employee_id,worked_minutes,ot_minutes').gte('work_date',start).lt('work_date',end),
-    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
+  const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
+    db.from('employees').select('id,name,category,split_shift').eq('id',employeeId).single(),
+    db.from('daily_records').select('work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes').eq('employee_id',employeeId).gte('work_date',start).lt('work_date',end),
+    db.from('attendance').select('work_date,status').eq('employee_id',employeeId).gte('work_date',start).lt('work_date',end),
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
   ]);
-  if(empError||recError||attError){
-    $('reportTable').innerHTML='<tr><td>'+esc((empError||recError||attError)?.message||'Unable to generate report.')+'</td></tr>';
-    return;
+  const err=empError||recError||attError||holError;
+  if(err) throw new Error(err.message);
+  const recMap=new Map((records||[]).map(r=>[r.work_date,r]));
+  const attMap=new Map((att||[]).map(a=>[a.work_date,a.status]));
+  const holidayMap=new Map((hols||[]).map(h=>[h.holiday_date,h.name]));
+  const d=new Date(start+'T00:00:00');
+  const days=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  const rows=[];
+  let totalWorked=0,totalOt=0;
+  const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
+  for(let n=1;n<=days;n++){
+    const date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(n).padStart(2,'0');
+    const day=new Date(date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
+    const rec=recMap.get(date);
+    let status=attMap.get(date)||(holidayMap.has(date)?'Holiday':(new Date(date+'T00:00:00').getDay()===0?'Sunday':''));
+    if(status in counts) counts[status]++;
+    if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
+    rows.push({date,day,rec,status});
   }
-  const list=(emps||[]).filter(e=>!employeeId||e.id===employeeId);
-  const recordMap=new Map();
-  for(const r of records||[]) recordMap.set(r.employee_id+'|'+r.work_date,r);
-  const attMap=new Map();
-  for(const a of att||[]) attMap.set(a.employee_id+'|'+a.work_date,a.status);
-  let totalWorked=0,totalOt=0,totalDays=0;
-  const rows=[['Employee','Category','Present','First Half Leave','Second Half Leave','Full Day Leave','Absent','Leave','Sunday','Holiday','Days Worked','Total Worked','Total OT']];
-  for(const e of list){
-    const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
-    let worked=0,ot=0,daysWorked=0;
-    for(const a of att||[]){
-      if(a.employee_id!==e.id)continue;
-      if(counts[a.status]!==undefined)counts[a.status]++;
-    }
-    for(const r of records||[]){
-      if(r.employee_id!==e.id)continue;
-      worked+=Number(r.worked_minutes)||0;ot+=Number(r.ot_minutes)||0;daysWorked++;
-    }
-    totalWorked+=worked;totalOt+=ot;totalDays+=daysWorked;
-    rows.push([e.name,e.category,counts.Present,counts['First Half Leave'],counts['Second Half Leave'],counts['Full Day Leave'],counts.Absent,counts.Leave,counts.Sunday,counts.Holiday,daysWorked,fmtMin(worked),fmtMin(ot)]);
+  return {month,employee:emps,rows,totalWorked,totalOt,counts};
+}
+
+function reportHtml(data){
+  const split=!!data.employee.split_shift;
+  const headers=split
+    ? ['Date','Day','IN 1','OUT 1','IN 2','OUT 2','Worked','OT','Attendance']
+    : ['Date','Day','IN','OUT','Worked','OT','Attendance'];
+  let out='<tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
+  for(const r of data.rows){
+    const x=r.rec||{};
+    const cells=split
+      ? [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.in_time_2?.slice(0,5)||'',x.out_time_2?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]
+      : [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status];
+    out+='<tr>'+cells.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>';
   }
-  const monthLabel=new Date(month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
-  $('reportTitle').textContent='Monthly Attendance and OT Report - '+monthLabel;
-  $('reportSummary').textContent=(employeeId?((list[0]?.name||'Employee')+' | '):'All Employees | ')+'Total Days Worked '+totalDays+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
-  $('reportTable').innerHTML=rows.map((r,i)=>'<tr>'+r.map(v=>i===0?'<th>'+esc(v)+'</th>':'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
+  const totalCells=split
+    ? ['','','','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt), '']
+    : ['','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),''];
+  out+='<tr class="reportTotal">'+totalCells.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>';
+  return out;
+}
+
+async function generateReport(){
+  const btn=$('generateReport');btn.disabled=true;btn.textContent='Loading...';
+  try{
+    const data=await getMonthlyReportData();
+    const label=new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    $('reportTitle').textContent=data.employee.name+' | '+data.employee.category+' | '+label;
+    const c=data.counts;
+    $('reportSummary').textContent='Present '+c.Present+' | 1st Half Leave '+c['First Half Leave']+' | 2nd Half Leave '+c['Second Half Leave']+' | Full Day Leave '+c['Full Day Leave']+' | Sundays '+c.Sunday+' | Holidays '+c.Holiday+' | Total Worked '+fmtMin(data.totalWorked)+' | Total OT '+fmtMin(data.totalOt);
+    $('reportTable').innerHTML=reportHtml(data);
+  }catch(e){
+    $('reportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>';
+  }finally{
+    btn.disabled=false;btn.textContent='Generate';
+  }
 }
 
 async function exportReport(){
-  const month=$('reportMonth').value||monthNow(), employeeId=$('reportEmployee').value;
-  const {start,end}=monthRange(month);
-  const [{data:emps},{data:records},{data:att}]=await Promise.all([
-    db.from('employees').select('id,name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,employee_id,worked_minutes,ot_minutes').gte('work_date',start).lt('work_date',end),
-    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
-  ]);
-  const list=(emps||[]).filter(e=>!employeeId||e.id===employeeId);
-  const rows=[['Employee','Category','Present','First Half Leave','Second Half Leave','Full Day Leave','Absent','Leave','Sunday','Holiday','Days Worked','Total Worked','Total OT']];
-  for(const e of list){
-    const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
-    let worked=0,ot=0,daysWorked=0;
-    for(const a of att||[])if(a.employee_id===e.id&&counts[a.status]!==undefined)counts[a.status]++;
-    for(const r of records||[])if(r.employee_id===e.id){worked+=Number(r.worked_minutes)||0;ot+=Number(r.ot_minutes)||0;daysWorked++;}
-    rows.push([e.name,e.category,counts.Present,counts['First Half Leave'],counts['Second Half Leave'],counts['Full Day Leave'],counts.Absent,counts.Leave,counts.Sunday,counts.Holiday,daysWorked,fmtMin(worked),fmtMin(ot)]);
-  }
-  downloadCSV('FCS-Monthly-Report-'+month+'.csv',rows);
+  try{
+    const data=await getMonthlyReportData();
+    const split=!!data.employee.split_shift;
+    const headers=split
+      ? ['Date','Day','IN 1','OUT 1','IN 2','OUT 2','Worked','OT','Attendance']
+      : ['Date','Day','IN','OUT','Worked','OT','Attendance'];
+    const rows=[headers];
+    for(const r of data.rows){
+      const x=r.rec||{};
+      rows.push(split
+        ? [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.in_time_2?.slice(0,5)||'',x.out_time_2?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]
+        : [r.date,r.day,x.in_time?.slice(0,5)||'',x.out_time?.slice(0,5)||'',x.worked_minutes!=null?fmtMin(x.worked_minutes):'',x.ot_minutes!=null?fmtMin(x.ot_minutes):'',r.status]);
+    }
+    const total=split
+      ? ['','','','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),'']
+      : ['','','','Total',fmtMin(data.totalWorked),fmtMin(data.totalOt),''];
+    rows.push(total);
+    downloadCSV('FCS-Monthly-Report-'+data.employee.name.replace(/[^a-z0-9]+/gi,'-')+'-'+data.month+'.csv',rows);
+  }catch(e){alert(e.message||'Unable to export report.')}
 }
 
 async function saveAllChanges(){
