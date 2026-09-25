@@ -558,6 +558,12 @@ window.saveAttendance=async(date,eid)=>{
 };
 
 
+function printReportTab(tab){
+  document.body.dataset.printTab=tab;
+  window.print();
+  setTimeout(()=>{delete document.body.dataset.printTab},500);
+}
+
 function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
@@ -566,7 +572,7 @@ $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>window.print();$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
