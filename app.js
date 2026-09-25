@@ -29,6 +29,7 @@ const fmtMin=m=>{m=Math.max(0,Math.round(Number(m)||0));return Math.floor(m/60)+
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const monthNow=()=>today().slice(0,7);
 const monthRange=m=>{const d=new Date(m+'-01T00:00:00');return {start:m+'-01',end:new Date(d.getFullYear(),d.getMonth()+1,1).toISOString().slice(0,10)}};
+const fmtDate=d=>{const s=String(d||'');const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
 
 let employees=[],rules=[];
 const DB_NAME='fcs-attendance-local',STORE='pending',CACHE_KEY='fcs-attendance-cache';
@@ -125,7 +126,7 @@ async function loadRecords(){
     }
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
-  $('printTitle').textContent='Daily Register - '+date;
+  $('printTitle').textContent='Daily Register - '+fmtDate(date);
   $('recordSummary').textContent=date+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
 }
@@ -148,7 +149,7 @@ async function exportRecords(){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    rowsOut.push([date,e.name,e.category,inValue,outValue,r?fmtMin(r.worked_minutes):'',r?fmtMin(r.ot_minutes):'',attMap.get(e.id)||'']);
+    rowsOut.push([fmtDate(date),e.name,e.category,inValue,outValue,r?fmtMin(r.worked_minutes):'',r?fmtMin(r.ot_minutes):'',attMap.get(e.id)||'']);
   }
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
 }
@@ -212,7 +213,7 @@ async function generateReport(){
     const data=await getOTReportData();
     const label=new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
     $('reportTitle').textContent='DATA FOR WAGES COMPUTATION - CITY OFFICE';
-    $('reportSummary').textContent='PERIOD '+data.month.slice(5,7)+'/01/'+data.month.slice(0,4)+' to '+new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit',year:'numeric'}); 
+    $('reportSummary').textContent='PERIOD 01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(data.month+'-01T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/01\//,''); 
     $('reportTable').innerHTML=otReportHtml(data);
   }catch(e){$('reportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>'}
   finally{btn.disabled=false;btn.textContent='Generate'}
@@ -286,7 +287,7 @@ async function addEmployee(){
 async function loadHolidays(){
   const {data}=await db.from('holidays').select('*').order('holiday_date');
   $('holidaysTable').innerHTML='<tr><th>Date</th><th>Holiday</th><th></th></tr>'+
-  (data||[]).map(h=>'<tr><td>'+h.holiday_date+'</td><td>'+esc(h.name)+'</td><td><button class="secondary" onclick="deleteHoliday(\''+h.id+'\')">Delete</button></td></tr>').join('');
+  (data||[]).map(h=>'<tr><td>'+fmtDate(h.holiday_date)+'</td><td>'+esc(h.name)+'</td><td><button class="secondary" onclick="deleteHoliday(\''+h.id+'\')">Delete</button></td></tr>').join('');
 }
 window.deleteHoliday=async id=>{const {error}=await db.from('holidays').delete().eq('id',id);if(error)alert(error.message);else await loadHolidays()};
 async function addHoliday(){
