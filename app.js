@@ -610,7 +610,7 @@ async function saveRules(){
   for(const cat of Object.keys(by)){
     const v={};by[cat].forEach(i=>v[i.dataset.k]=i.value);
     const {error}=await db.from('category_rules').update({normal_start:v.normal_start||null,normal_end:v.normal_end||null,break_minutes:Number(v.break_minutes||0),normal_work_minutes:Number(v.normal_work_minutes||0)}).eq('category',cat);
-    if(error){$('rulesMessage').textContent=error.message;return}
+    if(error){$('rulesMessage').textContent=error.message;throw new Error(error.message)}
   }
   $('rulesMessage').textContent='Rules saved. New entries will use updated rules.';await loadRules();
 }
