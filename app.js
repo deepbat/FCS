@@ -224,46 +224,41 @@ async function saveRules(){
 }
 
 async function loadAttendance(){
-  const m=$('attendanceMonth').value||monthNow(),{start,end}=monthRange(m);
+  const date=$('attendanceDate').value||today();
   const [{data:emps},{data:att},{data:hols},{data:records}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).order('name'),
-    db.from('attendance').select('*').gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('*').gte('holiday_date',start).lt('holiday_date',end),
-    db.from('daily_records').select('work_date,employee_id,in_time,out_time').gte('work_date',start).lt('work_date',end)
+    db.from('attendance').select('*').eq('work_date',date),
+    db.from('holidays').select('*').eq('holiday_date',date),
+    db.from('daily_records').select('work_date,employee_id,in_time,out_time').eq('work_date',date)
   ]);
-  const map=new Map((att||[]).map(x=>[x.work_date+'|'+x.employee_id,x]));
-  const recordMap=new Map((records||[]).map(x=>[x.work_date+'|'+x.employee_id,x]));
-  const holidayMap=new Map((hols||[]).map(x=>[x.holiday_date,x.name]));
+  const map=new Map((att||[]).map(x=>[x.employee_id,x]));
+  const recordMap=new Map((records||[]).map(x=>[x.employee_id,x]));
+  const holiday=(hols||[]).length>0;
+  const dow=new Date(date+'T00:00:00').getDay();
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
-  let html='<tr><th>Date</th><th>Employee</th><th>Status</th><th>Save</th></tr>';
-  const d=new Date(start+'T00:00:00'),y=d.getFullYear(),mo=d.getMonth(),days=new Date(y,mo+1,0).getDate();
-  for(let day=1;day<=days;day++){
-    const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0'),dow=new Date(ds+'T00:00:00').getDay();
-    for(const e of emps||[]){
-      const existing=map.get(ds+'|'+e.id),rec=recordMap.get(ds+'|'+e.id);
-      let defaultStatus=holidayMap.has(ds)?'Holiday':(dow===0?'Sunday':'');
-      if(e.category==='Staff'){
-        if(rec?.in_time&&rec?.out_time){
-          const inMin=Number(rec.in_time.slice(0,2))*60+Number(rec.in_time.slice(3,5));
-          const outMin=Number(rec.out_time.slice(0,2))*60+Number(rec.out_time.slice(3,5));
-          if(inMin>=13*60+45 && outMin>=17*60+15) defaultStatus='First Half Leave';
-          else if(inMin<=9*60+30 && outMin<=13*60+15) defaultStatus='Second Half Leave';
-          else if(inMin<=9*60+30 && outMin>=17*60+15) defaultStatus='Present';
-        }
-      }
-      const statuses=e.category==='Staff'?staffStatuses:otherStatuses;
-      const selected=existing?.status||defaultStatus;
-      html+='<tr><td>'+ds+'</td><td>'+esc(e.name)+'</td><td><select id="a-'+ds+'-'+e.id+'">'+
-        '<option></option>'+statuses.map(s=>'<option '+(selected===s?'selected':'')+'>'+s+'</option>').join('')+
-        '</select></td><td><button class="secondary attendanceSaveBtn" data-date="'+ds+'" data-eid="'+e.id+'">Save</button></td></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>Status</th><th>Save</th></tr>';
+  for(const e of emps||[]){
+    const existing=map.get(e.id),rec=recordMap.get(e.id);
+    let defaultStatus=holiday?'Holiday':(dow===0?'Sunday':'');
+    if(e.category==='Staff' && rec?.in_time && rec?.out_time){
+      const inMin=Number(rec.in_time.slice(0,2))*60+Number(rec.in_time.slice(3,5));
+      const outMin=Number(rec.out_time.slice(0,2))*60+Number(rec.out_time.slice(3,5));
+      if(inMin>=13*60+45 && outMin>=17*60+15) defaultStatus='First Half Leave';
+      else if(inMin<=9*60+30 && outMin<=13*60+15) defaultStatus='Second Half Leave';
+      else if(inMin<=9*60+30 && outMin>=17*60+15) defaultStatus='Present';
     }
+    const statuses=e.category==='Staff'?staffStatuses:otherStatuses;
+    const selected=existing?.status||defaultStatus;
+    html+='<tr><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><select id="a-'+e.id+'">'+
+      '<option></option>'+statuses.map(s=>'<option '+(selected===s?'selected':'')+'>'+s+'</option>').join('')+
+      '</select></td><td><button class="secondary attendanceSaveBtn" data-eid="'+e.id+'">Save</button></td></tr>';
   }
   $('attendanceTable').innerHTML=html;
-  document.querySelectorAll('.attendanceSaveBtn').forEach(btn=>btn.onclick=()=>saveAttendance(btn.dataset.date,btn.dataset.eid));
+  document.querySelectorAll('.attendanceSaveBtn').forEach(btn=>btn.onclick=()=>saveAttendance(date,btn.dataset.eid));
 }
 window.saveAttendance=async(date,eid)=>{
-  const status=$('a-'+date+'-'+eid).value;if(!status)return;
+  const status=$('a-'+eid).value;if(!status)return;
   const {data:emp}=await db.from('employees').select('category').eq('id',eid).single();
   if(emp?.category==='Staff' && !['Present','First Half Leave','Second Half Leave','Full Day Leave'].includes(status))return;
   const {error}=await db.from('attendance').upsert({work_date:date,employee_id:eid,status},{onConflict:'work_date,employee_id'});
@@ -271,16 +266,16 @@ window.saveAttendance=async(date,eid)=>{
 };
 
 async function exportAttendance(){
-  const m=$('attendanceMonth').value||monthNow(),{start,end}=monthRange(m);
-  const {data}=await db.from('attendance').select('work_date,status,employees(name,category)').gte('work_date',start).lt('work_date',end).order('work_date');
-  downloadCSV('FCS-Attendance-'+m+'.csv',[['Date','Employee','Category','Status'],...(data||[]).map(r=>[r.work_date,r.employees?.name,r.employees?.category,r.status])]);
+  const date=$('attendanceDate').value||today();
+  const {data}=await db.from('attendance').select('work_date,status,employees(name,category)').eq('work_date',date).order('employees(name)');
+  downloadCSV('FCS-Attendance-'+date+'.csv',[['Date','Employee','Category','Status'],...(data||[]).map(r=>[r.work_date,r.employees?.name,r.employees?.category,r.status])]);
 }
 
 function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
 
-$('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceMonth').value=monthNow();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
+$('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('exportAttendance').onclick=exportAttendance;
