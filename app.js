@@ -115,8 +115,8 @@ async function loadRecords(){
   const split=!!emp.split_shift;
   let totalOt=0,totalWorked=0;
   let html=split
-    ? '<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th><th>Save</th></tr>'
-    : '<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th><th>Save</th></tr>';
+    ? '<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th></tr>'
+    : '<tr><th>Date</th><th>Day</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Status</th></tr>';
   for(let day=1;day<=days;day++){
     const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
     const rec=recordMap.get(ds),status=attMap.get(ds)||(holidayMap.has(ds)?'Holiday':(new Date(ds+'T00:00:00').getDay()===0?'Sunday':''));
@@ -124,15 +124,14 @@ async function loadRecords(){
     if(rec){totalOt+=Number(rec.ot_minutes)||0;totalWorked+=Number(rec.worked_minutes)||0}
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     if(split){
-      html+='<tr class="splitShiftRow"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in1-'+ds,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+ds,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
+      html+='<tr class="splitShiftRow" data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in1-'+ds,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+ds,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
     }else{
-      html+='<tr><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in-'+ds,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+ds,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
+      html+='<tr data-record-id="'+(rec?esc(rec.id):'')+'" data-record-date="'+ds+'"><td>'+ds+'</td><td>'+dow+'</td><td>'+input('in-'+ds,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+ds,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+esc(status)+'</td><td><button class="secondary recordSaveBtn" data-id="'+(rec?esc(rec.id):'')+'" data-date="'+ds+'">Save</button></td></tr>';
     }
   }
   $('printTitle').textContent=emp.name+' - '+emp.category+' - '+new Date(dateStart+'T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+' OT Register';
   $('recordSummary').textContent=emp.name+' | '+emp.category+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
-  document.querySelectorAll('.recordSaveBtn').forEach(btn=>btn.onclick=()=>saveRecordRow(btn.dataset.id||null,btn.dataset.date,current,emp));
 }
 window.saveRecordRow=async(id,date,employee,emp)=>{
   const split=!!emp.split_shift;
@@ -237,7 +236,7 @@ async function loadAttendance(){
   const dow=new Date(date+'T00:00:00').getDay();
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
-  let html='<tr><th>Employee</th><th>Category</th><th>Status</th><th>Save</th></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>Status</th></tr>';
   for(const e of emps||[]){
     const existing=map.get(e.id),rec=recordMap.get(e.id);
     let defaultStatus=holiday?'Holiday':(dow===0?'Sunday':'');
@@ -250,12 +249,11 @@ async function loadAttendance(){
     }
     const statuses=e.category==='Staff'?staffStatuses:otherStatuses;
     const selected=existing?.status||defaultStatus;
-    html+='<tr><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><select id="a-'+e.id+'">'+
+    html+='<tr data-attendance-eid="'+e.id+'"><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><select id="a-'+e.id+'">'+
       '<option></option>'+statuses.map(s=>'<option '+(selected===s?'selected':'')+'>'+s+'</option>').join('')+
-      '</select></td><td><button class="secondary attendanceSaveBtn" data-eid="'+e.id+'">Save</button></td></tr>';
+      '</select></td></tr>';
   }
   $('attendanceTable').innerHTML=html;
-  document.querySelectorAll('.attendanceSaveBtn').forEach(btn=>btn.onclick=()=>saveAttendance(date,btn.dataset.eid));
 }
 window.saveAttendance=async(date,eid)=>{
   const status=$('a-'+eid).value;if(!status)return;
@@ -271,6 +269,60 @@ async function exportAttendance(){
   downloadCSV('FCS-Attendance-'+date+'.csv',[['Date','Employee','Category','Status'],...(data||[]).map(r=>[r.work_date,r.employees?.name,r.employees?.category,r.status])]);
 }
 
+async function saveAllChanges(){
+  const active=document.querySelector('.tab.active')?.dataset.tab;
+  const btn=$('saveAllBtn');
+  btn.disabled=true;
+  btn.textContent='Saving...';
+  try{
+    if(active==='records'){
+      const employeeId=$('recordEmployee').value;
+      const emp=employees.find(e=>e.id===employeeId)||null;
+      const list=await db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('id',employeeId).single();
+      const employee=list.data||emp;
+      const rows=[...document.querySelectorAll('#recordsTable tr[data-record-date]')];
+      for(const row of rows){
+        const date=row.dataset.recordDate,id=row.dataset.recordId||null,split=!!employee?.split_shift;
+        const ni=split?normalizeTime($('in1-'+date).value):normalizeTime($('in-'+date).value);
+        const no=split?'01:00':normalizeTime($('out-'+date).value);
+        const ni2=split?'06:00':'';
+        const no2=split?normalizeTime($('out2-'+date).value):'';
+        if(!ni&&!no&&!id)continue;
+        if(!ni||!no)throw new Error('Please enter both IN and OUT for '+date+'.');
+        if(split && ((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both IN 2 and OUT 2, or leave both blank, for '+date+'.');
+        const payload={in_time:ni+':00',out_time:no+':00'};
+        if(split){payload.in_time_2=ni2?ni2+':00':null;payload.out_time_2=no2?no2+':00':null}
+        let result;
+        if(id) result=await db.from('daily_records').update(payload).eq('id',id);
+        else result=await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:employee.id,...payload,break_minutes:employee.break_minutes??0,normal_work_minutes:employee.normal_work_minutes??525,ot_eligible:employee.category==='Driver'||employee.category==='Gateman',ot_threshold_minutes:15,round_minutes:employee.round_minutes??0});
+        if(result.error)throw new Error(result.error.message);
+      }
+      await loadRecords();
+    }else if(active==='attendance'){
+      const date=$('attendanceDate').value||today();
+      const employeeRows=[...document.querySelectorAll('#attendanceTable tr[data-attendance-eid]')];
+      for(const row of employeeRows){
+        const eid=row.dataset.attendanceEid,status=$('a-'+eid).value;
+        if(!status)continue;
+        const {data:emp}=await db.from('employees').select('category').eq('id',eid).single();
+        if(emp?.category==='Staff'&&!['Present','First Half Leave','Second Half Leave','Full Day Leave'].includes(status))continue;
+        const {error}=await db.from('attendance').upsert({work_date:date,employee_id:eid,status},{onConflict:'work_date,employee_id'});
+        if(error)throw new Error(error.message);
+      }
+      await loadAttendance();
+    }else if(active==='settings'){
+      await saveRules();
+    }
+    btn.textContent='Saved';
+    setTimeout(()=>{btn.textContent='Save Changes'},900);
+  }catch(e){
+    alert(e.message||'Unable to save changes.');
+    btn.textContent='Save Changes';
+  }finally{
+    btn.disabled=false;
+  }
+}
+
 function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
@@ -279,7 +331,7 @@ $('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceDate'
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('attendanceDate').onchange=loadAttendance;$('exportAttendance').onclick=exportAttendance;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveRules').onclick=saveRules;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;setupTabs();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
