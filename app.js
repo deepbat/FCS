@@ -281,54 +281,61 @@ async function getMonthlyAttendanceData(){
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,employee_id,worked_minutes,ot_minutes').gte('work_date',start).lt('work_date',end),
-    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
+    db.from('daily_records').select('work_date,employee_id').gte('work_date',start).lt('work_date',end),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date'),
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date')
   ]);
   const err=empError||recError||attError||holError;
   if(err)throw new Error(err.message);
-  const days=[],d=new Date(start+'T00:00:00'),last=new Date(end+'T00:00:00');
-  while(d<last){days.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}
-  const recordMap=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
+
+  const dates=[...(records||[]).map(r=>r.work_date),...(att||[]).map(r=>r.work_date)].filter(Boolean).sort();
+  const cutoff=dates.length?dates[dates.length-1]:null;
+  const days=[];
+  if(cutoff){
+    const d=new Date(start+'T00:00:00'),last=new Date(cutoff+'T00:00:00');
+    while(d<=last){days.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}
+  }
+
+  const recordSet=new Set((records||[]).map(r=>r.work_date+'|'+r.employee_id));
   const attMap=new Map((att||[]).map(r=>[r.work_date+'|'+r.employee_id,r.status]));
   const holidayMap=new Map((hols||[]).map(h=>[h.holiday_date,h.name]));
+
   const rows=(emps||[]).map((e,i)=>{
-    const c={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0,worked:0,ot:0};
+    const c={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0};
     for(const date of days){
-      const rec=recordMap.get(date+'|'+e.id), explicit=attMap.get(date+'|'+e.id);
+      const hasRecord=recordSet.has(date+'|'+e.id);
+      const explicit=attMap.get(date+'|'+e.id);
       const dow=new Date(date+'T00:00:00').getDay();
-      const status=explicit||(rec?'Present':holidayMap.has(date)?'Holiday':dow===0?'Sunday':'Absent');
+      const status=explicit||(hasRecord?'Present':holidayMap.has(date)?'Holiday':dow===0?'Sunday':'Absent');
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
       else if(status==='Full Day Leave'||status==='Leave')c.leave++;
       else if(status==='Absent')c.absent++;
       else if(status==='Sunday')c.sunday++;
       else if(status==='Holiday')c.holiday++;
-      if(rec){c.worked+=Number(rec.worked_minutes)||0;c.ot+=Number(rec.ot_minutes)||0}
     }
     return {no:i+1,employee:e,...c};
   });
-  return {month,rows};
+  return {month,cutoff,rows};
 }
 function monthlyAttendanceHtml(data){
-  let out='<tr><th>S. No.</th><th>Name</th><th>Category</th><th>Present</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th><th>Worked</th><th>OT</th></tr>';
-  let totals={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0,worked:0,ot:0};
+  let out='<tr><th>S. No.</th><th>Name</th><th>Category</th><th>Present</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr>';
+  const totals={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0};
   data.rows.forEach(r=>{
     for(const k of Object.keys(totals))totals[k]+=r[k];
-    out+='<tr><td>'+r.no+'.</td><td>'+esc(r.employee.name)+'</td><td>'+esc(r.employee.category)+'</td><td>'+r.present+'</td><td>'+r.halfDay+'</td><td>'+r.leave+'</td><td>'+r.absent+'</td><td>'+r.sunday+'</td><td>'+r.holiday+'</td><td>'+fmtMin(r.worked)+'</td><td>'+fmtMin(r.ot)+'</td></tr>';
+    out+='<tr><td>'+r.no+'.</td><td>'+esc(r.employee.name)+'</td><td>'+esc(r.employee.category)+'</td><td>'+r.present+'</td><td>'+r.halfDay+'</td><td>'+r.leave+'</td><td>'+r.absent+'</td><td>'+r.sunday+'</td><td>'+r.holiday+'</td></tr>';
   });
-  out+='<tr class="reportTotal"><td></td><td>Total</td><td></td><td>'+totals.present+'</td><td>'+totals.halfDay+'</td><td>'+totals.leave+'</td><td>'+totals.absent+'</td><td>'+totals.sunday+'</td><td>'+totals.holiday+'</td><td>'+fmtMin(totals.worked)+'</td><td>'+fmtMin(totals.ot)+'</td></tr>';
+  out+='<tr class="reportTotal"><td></td><td>Total</td><td></td><td>'+totals.present+'</td><td>'+totals.halfDay+'</td><td>'+totals.leave+'</td><td>'+totals.absent+'</td><td>'+totals.sunday+'</td><td>'+totals.holiday+'</td></tr>';
   return out;
 }
 async function generateAttendanceReport(){
   const btn=$('generateAttendanceReport');btn.disabled=true;btn.textContent='Loading...';
   try{
     const data=await getMonthlyAttendanceData();
-    $('attendanceReportTitle').textContent='MONTHLY ATTENDANCE AND OVERTIME REPORT';
+    $('attendanceReportTitle').textContent='MONTHLY ATTENDANCE REPORT';
     const first='01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4);
-    const lastDate=new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0);
-    const last=lastDate.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
-    $('attendanceReportSummary').textContent='PERIOD '+first+' to '+last;
+    const cutoff=data.cutoff?fmtDate(data.cutoff):'No attendance data';
+    $('attendanceReportSummary').textContent=data.cutoff?'PERIOD '+first+' to '+cutoff:'No attendance data available for selected month';
     $('attendanceReportTable').innerHTML=monthlyAttendanceHtml(data);
   }catch(e){$('attendanceReportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>'}
   finally{btn.disabled=false;btn.textContent='Generate'}
@@ -336,11 +343,12 @@ async function generateAttendanceReport(){
 async function exportAttendanceReport(){
   try{
     const data=await getMonthlyAttendanceData();
-    const rows=[['S. No.','Name','Category','Present','Half Day','Leave','Absent','Sunday','Holiday','Worked','OT']];
-    data.rows.forEach(r=>rows.push([r.no,r.employee.name,r.employee.category,r.present,r.halfDay,r.leave,r.absent,r.sunday,r.holiday,fmtMin(r.worked),fmtMin(r.ot)]));
+    const rows=[['S. No.','Name','Category','Present','Half Day','Leave','Absent','Sunday','Holiday']];
+    data.rows.forEach(r=>rows.push([r.no,r.employee.name,r.employee.category,r.present,r.halfDay,r.leave,r.absent,r.sunday,r.holiday]));
     downloadCSV('FCS-Monthly-Attendance-'+data.month+'.csv',rows);
-  }catch(e){alert(e.message||'Unable to export report.')}
+  }catch(e){alert(e.message||'Unable to export attendance report.')}
 }
+
 async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
