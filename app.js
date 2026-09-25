@@ -126,7 +126,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncQueue(
 setInterval(syncQueue,30000);
 
 async function loadEmployees(){
-  const {data,error}=await db.from('employees').select('id,employee_code,name,category,active').eq('active',true).order('name');
+  const {data,error}=await db.from('employees').select('id,employee_code,name,category,active,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name');
   if(error){loadCache();renderGateEmployees();return}
   employees=data||[];saveCache();renderGateEmployees();
 }
@@ -143,7 +143,7 @@ async function saveGate(){
   const work_date=$('workDate').value,employee_id=$('employee').value,in_time=normalizeTime($('inTime').value),out_time=normalizeTime($('outTime').value);
   if(!work_date||!employee_id||!in_time||!out_time){$('message').textContent='Please enter date, employee, IN and OUT.';return}
   const emp=employees.find(e=>e.id===employee_id),rule=rules.find(r=>r.category===emp?.category);
-  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:rule?.break_minutes??0,normal_work_minutes:rule?.normal_work_minutes??525,ot_eligible:rule?.ot_eligible??false,ot_threshold_minutes:rule?.ot_threshold_minutes??15};
+  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:emp?.break_minutes??rule?.break_minutes??0,normal_work_minutes:emp?.normal_work_minutes??rule?.normal_work_minutes??525,ot_eligible:rule?.ot_eligible??false,ot_threshold_minutes:rule?.ot_threshold_minutes??15,round_minutes:emp?.round_minutes??rule?.round_minutes??0};
   $('saveBtn').disabled=true;$('message').textContent='Saving...';
   const {error}=await db.from('daily_records').insert(row);
   if(!error){
