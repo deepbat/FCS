@@ -18,37 +18,11 @@ function normalizeTime(v){
   if(/^\d{1,2}$/.test(v)){const h=Number(v);if(h<=23)return String(h).padStart(2,'0')+':00';}
   return '';
 }
-async function autoSaveEmployee(sourceEl){
-  setSaveStatus('saving');
-  const row=sourceEl.closest('tr[data-employee-id]');if(!row)return;
-  const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
-  const date=$('recordDate')?.value;if(!date)return;
-  const split=!!emp.split_shift;
-  const ni=normalizeTime(split?$('in1-'+emp.id)?.value:$('in-'+emp.id)?.value);
-  const no=normalizeTime(split?$('out2-'+emp.id)?.value:$('out-'+emp.id)?.value);
-  const status=$('a-'+emp.id)?.value||'';
-  if(!ni||!no){
-    if(status){
-      const r=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
-      if(r.error)alert(r.error.message);
-    }
-    return;
-  }
-  const existingId=row.dataset.recordId||null;
-  const payload={in_time:ni+':00',out_time:no+':00'};
-  if(split){payload.in_time_2='06:00:00';payload.out_time_2=no+':00';}
-  const result=existingId
-    ?await db.from('daily_records').update(payload).eq('id',existingId)
-    :await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0}).select('id').single();
-  if(result.error){alert(result.error.message);return}
-  if(result.data?.id)row.dataset.recordId=result.data.id;
-  if(status){
-    const a=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
-    if(a.error)alert(a.error.message);
-  }
-  await loadRecords();
-  setSaveStatus('saved');
+function markRecordUnsaved(){
+  setSaveStatus('unsaved');
+  refreshLiveTotals();
 }
+
 function normalizeTimeFields(){
   document.querySelectorAll('.timeEdit').forEach(el=>{
     if(el.dataset.timeReady)return;
@@ -138,12 +112,24 @@ async function loadRules(){
   if(error){loadCache();return}
   rules=data||[];saveCache();
 }
+function effectiveRule(emp){
+  const cat=rules.find(r=>r.category===emp?.category)||{};
+  const split=!!emp?.split_shift;
+  return {
+    break_minutes: split ? Number(emp.break_minutes??0) : (emp.category==='Gateman' ? Number(emp.break_minutes??cat.break_minutes??0) : Number(cat.break_minutes??0)),
+    normal_work_minutes: split ? Number(emp.normal_work_minutes??cat.normal_work_minutes??525) : (emp.category==='Gateman' ? Number(emp.normal_work_minutes??cat.normal_work_minutes??525) : Number(cat.normal_work_minutes??525)),
+    round_minutes: split ? Number(emp.round_minutes??cat.round_minutes??0) : Number(cat.round_minutes??0),
+    ot_eligible: !!cat.ot_eligible,
+    ot_threshold_minutes: Number(cat.ot_threshold_minutes??15)
+  };
+}
 
 async function saveGate(){
   const work_date=$('workDate').value,employee_id=$('employee').value,in_time=normalizeTime($('inTime').value),out_time=normalizeTime($('outTime').value);
   if(!work_date||!employee_id||!in_time||!out_time){$('message').textContent='Please enter date, employee, IN and OUT.';return}
   const emp=employees.find(e=>e.id===employee_id),rule=rules.find(r=>r.category===emp?.category);
-  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:emp?.break_minutes??rule?.break_minutes??0,normal_work_minutes:emp?.normal_work_minutes??rule?.normal_work_minutes??525,ot_eligible:rule?.ot_eligible??false,ot_threshold_minutes:rule?.ot_threshold_minutes??15,round_minutes:emp?.round_minutes??rule?.round_minutes??0};
+  const er=effectiveRule(emp);
+  const row={client_id:crypto.randomUUID(),work_date,employee_id,in_time:in_time+':00',out_time:out_time+':00',break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
   $('saveBtn').disabled=true;$('message').textContent='Saving...';
   const {error}=await db.from('daily_records').insert(row);
   if(!error){
@@ -178,11 +164,12 @@ async function loadRecords(){
   const list=emps||[], recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
   const attMap=new Map((att||[]).map(x=>[x.employee_id,x.status]));
   const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
-  const autoAttendance=[];
+  window.__recordEmployees=list;
+  window.__recordHoliday=holiday;
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
-  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     let status=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
@@ -213,11 +200,11 @@ async function loadRecords(){
     const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
     const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
-    if(emp.split_shift){
-      html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+input('in1-'+emp.id,rec?.in_time?.slice(0,5),'18:00')+'</td><td>'+input('out2-'+emp.id,rec?.out_time_2?.slice(0,5),'07:00')+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
-    }else{
-      html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+input('in-'+emp.id,rec?.in_time?.slice(0,5))+'</td><td>'+input('out-'+emp.id,rec?.out_time?.slice(0,5))+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
-    }
+    const in1=input('in-'+emp.id,rec?.in_time?.slice(0,5));
+    const out1=input('out-'+emp.id,rec?.out_time?.slice(0,5));
+    const in2=input('in2-'+emp.id,rec?.in_time_2?.slice(0,5));
+    const out2=input('out2-'+emp.id,rec?.out_time_2?.slice(0,5));
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+in2+'</td><td>'+out2+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
@@ -225,18 +212,14 @@ async function loadRecords(){
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
-    el.addEventListener('input',()=>{refreshLiveTotals();setSaveStatus('unsaved')});
-    el.addEventListener('blur',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
-    el.addEventListener('change',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
+    el.addEventListener('input',markRecordUnsaved);
+    el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});
+    el.addEventListener('change',markRecordUnsaved);
   });
   document.querySelectorAll('#recordsTable .attendanceEdit').forEach(el=>{
-    el.addEventListener('change',async()=>{setSaveStatus('unsaved');await autoSaveEmployee(el)});
+    el.addEventListener('change',markRecordUnsaved);
   });
   refreshLiveTotals();
-  if(autoAttendance.length){
-    const {error}=await db.from('attendance').upsert(autoAttendance,{onConflict:'work_date,employee_id'});
-    if(error) console.error('Automatic attendance save failed:',error);
-  }
 }
 function timeMinutes(v){
   const t=normalizeTime(v);if(!t)return null;
@@ -247,15 +230,24 @@ function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
   if(a===null||b===null)return {worked:null,ot:null};
   let total=b-a+(b<a?1440:0);
   if(emp.split_shift){
-    const c=timeMinutes(ni2||'06:00'),d=timeMinutes(no2);
+    const c=timeMinutes(ni2),d=timeMinutes(no2);
     if(c!==null&&d!==null)total+=d-c+(d<c?1440:0);
   }
-  const rounded=emp.round_minutes>0?Math.round(total/emp.round_minutes)*emp.round_minutes:total;
+  const er=effectiveRule(emp);
+  const rounded=er.round_minutes>0?Math.round(total/er.round_minutes)*er.round_minutes:total;
   const special=(emp.category==='Driver'||emp.category==='Gateman')&&(new Date(date+'T00:00:00').getDay()===0||isHoliday);
-  const worked=Math.max(0,rounded-(special?0:(emp.break_minutes||0)));
-  const ot=emp.category==='Driver'||emp.category==='Gateman'
-    ?(special?rounded:(rounded-(emp.normal_work_minutes||525)>15?rounded-(emp.normal_work_minutes||525):0))
-    :0;
+  const worked=Math.max(0,rounded-(special?0:er.break_minutes));
+  let ot=0;
+  if(er.ot_eligible){
+    if(special)ot=rounded;
+    else if(emp.split_shift){
+      const extra=rounded-er.normal_work_minutes;
+      ot=extra>er.ot_threshold_minutes?extra:0;
+    }else{
+      const extra=Math.max(0,b-(17*60+45));
+      ot=extra>er.ot_threshold_minutes?extra:0;
+    }
+  }
   return {worked,ot};
 }
 function setSaveStatus(state){
@@ -530,22 +522,29 @@ async function saveAllChanges(){
     for(const emp of emps||[]){
       const row=document.querySelector('#recordsTable tr[data-employee-id="'+emp.id+'"]');if(!row)continue;
       const split=!!emp.split_shift;
-      const ni=split?normalizeTime($('in1-'+emp.id).value):normalizeTime($('in-'+emp.id).value);
-      const no=split?'01:00':normalizeTime($('out-'+emp.id).value);
-      const ni2=split?'06:00':'';
-      const no2=split?normalizeTime($('out2-'+emp.id).value):'';
+      const ni=normalizeTime($('in-'+emp.id).value);
+      const no=normalizeTime($('out-'+emp.id).value);
+      const ni2=normalizeTime($('in2-'+emp.id).value);
+      const no2=normalizeTime($('out2-'+emp.id).value);
       const status=$('a-'+emp.id).value;
       if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+'.');
-      if(split&&((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both second-shift times for '+emp.name+'.');
+      if(split&&((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both IN 2 and OUT 2 for '+emp.name+'.');
+      if(!split&&(ni2||no2))throw new Error('Second-shift times are only allowed for split-shift employees.');
+      const er=effectiveRule(emp);
       if(ni&&no){
-        const payload={in_time:ni+':00',out_time:no+':00'};
-        if(split){payload.in_time_2=ni2?ni2+':00':null;payload.out_time_2=no2?no2+':00':null;}
+        const payload={in_time:ni+':00',out_time:no+':00',in_time_2:split?(ni2?ni2+':00':null):null,out_time_2:split?(no2?no2+':00':null):null,break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
         const id=idMap.get(emp.id);
-        const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0});
+        const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload});
+        if(result.error)throw new Error(result.error.message);
+      }else if(idMap.has(emp.id)){
+        const result=await db.from('daily_records').delete().eq('id',idMap.get(emp.id));
         if(result.error)throw new Error(result.error.message);
       }
       if(status){
         const result=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
+        if(result.error)throw new Error(result.error.message);
+      }else{
+        const result=await db.from('attendance').delete().eq('work_date',date).eq('employee_id',emp.id);
         if(result.error)throw new Error(result.error.message);
       }
     }
