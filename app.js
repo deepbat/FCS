@@ -195,8 +195,10 @@ async function loadRecords(){
           else if(inMin>=13*60+45&&outMin>=17*60+15) status='First Half Leave';
           else if(inMin<=9*60+30&&outMin>=17*60+15) status='Present';
         }
-      }else if(elapsed>=Number(emp.normal_work_minutes||0)){
-        status='Present';
+      }else{
+        const rule=rules.find(r=>r.category===emp.category);
+        const normalElapsed=Number(rule?.normal_work_minutes||emp.normal_work_minutes||525);
+        if(elapsed>=normalElapsed)status='Present';
       }
     }
     if(rec){totalWorked+=Number(rec.worked_minutes)||0;totalOt+=Number(rec.ot_minutes)||0;}
