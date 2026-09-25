@@ -18,6 +18,35 @@ function normalizeTime(v){
   if(/^\d{1,2}$/.test(v)){const h=Number(v);if(h<=23)return String(h).padStart(2,'0')+':00';}
   return '';
 }
+async function autoSaveEmployee(sourceEl){
+  const row=sourceEl.closest('tr[data-employee-id]');if(!row)return;
+  const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
+  const date=$('recordDate')?.value;if(!date)return;
+  const split=!!emp.split_shift;
+  const ni=normalizeTime(split?$('in1-'+emp.id)?.value:$('in-'+emp.id)?.value);
+  const no=normalizeTime(split?$('out2-'+emp.id)?.value:$('out-'+emp.id)?.value);
+  const status=$('a-'+emp.id)?.value||'';
+  if(!ni||!no){
+    if(status){
+      const r=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
+      if(r.error)alert(r.error.message);
+    }
+    return;
+  }
+  const existingId=row.dataset.recordId||null;
+  const payload={in_time:ni+':00',out_time:no+':00'};
+  if(split){payload.in_time_2='06:00:00';payload.out_time_2=no+':00';}
+  const result=existingId
+    ?await db.from('daily_records').update(payload).eq('id',existingId)
+    :await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0}).select('id').single();
+  if(result.error){alert(result.error.message);return}
+  if(result.data?.id)row.dataset.recordId=result.data.id;
+  if(status){
+    const a=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
+    if(a.error)alert(a.error.message);
+  }
+  await loadRecords();
+}
 function normalizeTimeFields(){
   document.querySelectorAll('.timeEdit').forEach(el=>{
     if(el.dataset.timeReady)return;
@@ -136,11 +165,57 @@ async function loadRecords(){
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
-  $('recordSummary').textContent=date+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
+  $('recordSummary').textContent=fmtDate(date)+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
+  document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
+    el.addEventListener('input',refreshLiveTotals);
+    el.addEventListener('blur',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
+    el.addEventListener('change',async()=>{refreshLiveTotals();await autoSaveEmployee(el)});
+  });
+  document.querySelectorAll('#recordsTable .attendanceEdit').forEach(el=>{
+    el.addEventListener('change',async()=>{await autoSaveEmployee(el)});
+  });
+  refreshLiveTotals();
 }
 
+function timeMinutes(v){
+  const t=normalizeTime(v);if(!t)return null;
+  const [h,m]=t.split(':').map(Number);return h*60+m;
+}
+function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
+  const a=timeMinutes(ni),b=timeMinutes(no);
+  if(a===null||b===null)return {worked:null,ot:null};
+  let total=b-a+(b<a?1440:0);
+  if(emp.split_shift){
+    const c=timeMinutes(ni2||'06:00'),d=timeMinutes(no2);
+    if(c!==null&&d!==null)total+=d-c+(d<c?1440:0);
+  }
+  const rounded=emp.round_minutes>0?Math.round(total/emp.round_minutes)*emp.round_minutes:total;
+  const special=(emp.category==='Driver'||emp.category==='Gateman')&&(new Date(date+'T00:00:00').getDay()===0||isHoliday);
+  const worked=Math.max(0,rounded-(special?0:(emp.break_minutes||0)));
+  const ot=emp.category==='Driver'||emp.category==='Gateman'
+    ?(special?rounded:(rounded-(emp.normal_work_minutes||525)>15?rounded-(emp.normal_work_minutes||525):0))
+    :0;
+  return {worked,ot};
+}
+function refreshLiveTotals(){
+  const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;
+  let worked=0,ot=0;
+  document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
+    const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
+    const split=!!emp.split_shift;
+    const ni=split?$('in1-'+emp.id)?.value:$('in-'+emp.id)?.value;
+    const no=split?$('out2-'+emp.id)?.value:$('out-'+emp.id)?.value;
+    const live=calcLiveMinutes(emp,ni,no,split?'06:00':'',split?no:'',date,isHoliday);
+    const workedCell=row.children[4],otCell=row.children[5];
+    workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
+    otCell.textContent=live.ot==null?'':fmtMin(live.ot);
+    if(live.worked!=null)worked+=live.worked;
+    if(live.ot!=null)ot+=live.ot;
+  });
+  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total OT '+fmtMin(ot);
+}
 function downloadCSV(name,rows){
   const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name;a.click();URL.revokeObjectURL(a.href);
