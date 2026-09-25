@@ -364,12 +364,27 @@ function utMinutesForRecord(record,holidaySet){
   const normalStart=9*60;
   return inMin!=null&&inMin<earlyCutoff?normalStart-inMin:0;
 }
+function minutesFromHHMM(v){
+  const m=String(v||'').match(/^(\d{2}):(\d{2})/);
+  return m?Number(m[1])*60+Number(m[2]):null;
+}
+function fmtHHMM(mins){
+  if(mins==null||mins<=0)return '';
+  return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
+}
+function utMinutesForRecord(record,holidaySet){
+  if(!record||holidaySet.has(record.work_date))return 0;
+  const inMin=minutesFromHHMM(record.in_time);
+  const earlyCutoff=8*60+40;
+  const normalStart=9*60;
+  return inMin!=null&&inMin<earlyCutoff?normalStart-inMin:0;
+}
 async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).in('category',['Driver','Gateman']).order('name'),
-    db.from('daily_records').select('work_date,employee_id,in_time,ot_minutes').gte('work_date',start).lt('work_date',end),
+    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes').gte('work_date',start).lt('work_date',end),
     db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end)
   ]);
   const err=empError||recError||holError;
@@ -388,7 +403,6 @@ async function getOTReportBase(){
   }
   return {month,emps:emps||[],records:records||[],holidaySet,byKey,totals};
 }
-
 async function loadReportOptions(){
   try{
     const base=await getOTReportBase();
@@ -400,7 +414,6 @@ async function loadReportOptions(){
     }).join('');
   }catch(e){$('reportPeople').innerHTML='<span class="muted">'+esc(e.message||'Unable to load employees.')+'</span>'}
 }
-
 async function getOTReportData(){
   const base=await getOTReportBase();
   const selected=[...document.querySelectorAll('.reportEmployeeCheck:checked')].map(x=>x.value);
@@ -417,32 +430,36 @@ async function getOTReportData(){
       const ot=r?Number(r.ot_minutes)||0:0;
       const ut=utMinutesForRecord(r,base.holidaySet);
       otTotal+=ot;utTotal+=ut;
-      days.push({date,ot,ut});
+      days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut});
     }
     return {no:i+1,employee:e,days,otTotal,utTotal,total:otTotal+utTotal};
   }).filter(r=>!$('otOnly').checked||r.total>0);
   return {month:base.month,rows};
 }
-
 function otReportHtml(data){
   let out='';
   let grandOT=0,grandUT=0;
   data.rows.forEach(r=>{
     grandOT+=r.otTotal;grandUT+=r.utTotal;
-    out+='<tr class="employeeHeading"><th colspan="3">'+esc(r.employee.name)+'</th></tr>';
-    out+='<tr><th>Date</th><th>OT</th><th>UT</th></tr>';
+    out+='<div class="otPersonReport">';
+    out+='<table class="otPersonTable"><tr><th colspan="7" class="employeeHeading">'+esc(r.employee.name)+'</th></tr>';
+    out+='<tr><th>Date</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>OT</th><th>UT</th></tr>';
     r.days.forEach(d=>{
-      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+fmtHHMM(d.ut)+'</td></tr>';
+      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+esc(d.out1)+'</td><td>'+esc(d.in2)+'</td><td>'+esc(d.out2)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+fmtHHMM(d.ut)+'</td></tr>';
     });
-    out+='<tr class="reportSubtotal"><td>Sub total</td><td>'+fmtHHMM(r.otTotal)+'</td><td>'+fmtHHMM(r.utTotal)+'</td></tr>';
-    out+='<tr class="reportTotal"><td>Total</td><td>'+fmtHHMM(r.total)+'</td><td></td></tr>';
+    out+='<tr class="reportSubtotal"><td>Sub total</td><td></td><td></td><td></td><td></td><td>'+fmtHHMM(r.otTotal)+'</td><td>'+fmtHHMM(r.utTotal)+'</td></tr>';
+    out+='<tr class="reportTotal"><td>Total</td><td colspan="4"></td><td>'+fmtHHMM(r.total)+'</td><td></td></tr>';
+    out+='</table></div>';
   });
-  if(data.rows.length>1){
-    out+='<tr class="reportGrandTotal"><td colspan="3">Grand Total: OT '+fmtHHMM(grandOT)+' + UT '+fmtHHMM(grandUT)+' = '+fmtHHMM(grandOT+grandUT)+'</td></tr>';
-  }
-  return out||'<tr><td colspan="3">No OT or UT for selected employees.</td></tr>';
+  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: OT '+fmtHHMM(grandOT)+' + UT '+fmtHHMM(grandUT)+' = '+fmtHHMM(grandOT+grandUT)+'</div>';
+  return out||'<div class="muted">No OT or UT for selected employees.</div>';
 }
-
+function safeSheetName(name,used){
+  let n=String(name||'Employee').replace(/[\\\/\?\*\[\]:]/g,' ').trim().slice(0,31)||'Employee';
+  let base=n,i=2;
+  while(used.has(n)){const suffix=' ('+i++ +')';n=base.slice(0,31-suffix.length)+suffix}
+  used.add(n);return n;
+}
 async function generateReport(){
   const btn=$('generateReport');btn.disabled=true;btn.textContent='Loading...';
   try{
@@ -451,23 +468,34 @@ async function generateReport(){
     const last=new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
     $('reportSummary').textContent='PERIOD 01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+last;
     $('reportTable').innerHTML=otReportHtml(data);
-  }catch(e){$('reportTable').innerHTML='<tr><td colspan="3">'+esc(e.message||'Unable to generate report.')+'</td></tr>'}
+  }catch(e){$('reportTable').innerHTML='<div>'+esc(e.message||'Unable to generate report.')+'</div>'}
   finally{btn.disabled=false;btn.textContent='Generate'}
 }
-
 async function exportReport(){
   try{
     const data=await getOTReportData();
-    const rows=[['Employee','Date','OT','UT']];
+    if(typeof XLSX==='undefined')throw new Error('Excel export library is not available. Please check internet connection and try again.');
+    const wb=XLSX.utils.book_new(),used=new Set();
     for(const r of data.rows){
-      for(const d of r.days)rows.push([r.employee.name,fmtDate(d.date),fmtHHMM(d.ot),fmtHHMM(d.ut)]);
-      rows.push([r.employee.name,'Sub total',fmtHHMM(r.otTotal),fmtHHMM(r.utTotal)]);
-      rows.push([r.employee.name,'Total',fmtHHMM(r.total),'']);
+      const aoa=[
+        ['OVERTIME AND UNDER TIME REPORT'],
+        ['Employee',r.employee.name],
+        ['Category',r.employee.category],
+        ['Period','01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})],
+        [],
+        ['Date','IN','OUT','IN 2','OUT 2','OT','UT']
+      ];
+      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,d.out1,d.in2,d.out2,fmtHHMM(d.ot),fmtHHMM(d.ut)]));
+      aoa.push(['Sub total','','','','',fmtHHMM(r.otTotal),fmtHHMM(r.utTotal)]);
+      aoa.push(['Total','','','','',fmtHHMM(r.total),'']);
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols']=[{wch:14},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10}];
+      XLSX.utils.book_append_sheet(wb,ws,safeSheetName(r.employee.name,used));
     }
-    downloadCSV('FCS-OT-UT-Report-'+data.month+'.csv',rows);
+    if(!wb.SheetNames.length)throw new Error('No employees selected.');
+    XLSX.writeFile(wb,'FCS-OT-UT-Report-'+data.month+'.xlsx');
   }catch(e){alert(e.message||'Unable to export report.')}
 }
-
 async function saveAllChanges(){
   const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';
   try{
