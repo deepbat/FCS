@@ -324,7 +324,11 @@ async function getMonthlyAttendanceData(){
   if(err)throw new Error(err.message);
 
   const dates=[...(records||[]).map(r=>r.work_date),...(att||[]).map(r=>r.work_date)].filter(Boolean).sort();
-  const cutoff=dates.length?dates[dates.length-1]:null;
+  const currentMonth=monthNow();
+  const isCompletedMonth=month<currentMonth;
+  const cutoff=isCompletedMonth
+    ?new Date(new Date(end+'T00:00:00').getTime()-86400000).toISOString().slice(0,10)
+    :(dates.length?dates[dates.length-1]:null);
   const days=[];
   if(cutoff){
     const d=new Date(start+'T00:00:00'),last=new Date(cutoff+'T00:00:00');
