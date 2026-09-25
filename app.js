@@ -143,6 +143,7 @@ async function saveGate(){
   const emp=employees.find(e=>e.id===employee_id);
   const split=!!emp?.split_shift;
   if(!work_date||!employee_id||!in_time||!out_time){$('message').textContent='Please enter date, employee, IN and OUT.';return}
+  if(!split&&timeMinutes(out_time)<timeMinutes(in_time)){$('message').textContent='OUT time cannot be earlier than IN time.';return}
   if(split&&((in_time_2&&!out_time_2)||(!in_time_2&&out_time_2))){$('message').textContent='Please enter both IN 2 and OUT 2.';return}
   if(!split&&(in_time_2||out_time_2)){$('message').textContent='Second-shift times are only for split-shift employees.';return}
   const er=effectiveRule(emp);
@@ -203,10 +204,6 @@ async function loadRecords(){
             else if(im>=825&&om>=1035) auto='First Half Leave';
             else if(im<=570&&om>=1035) auto='Present';
           }
-        }else{
-          const normalElapsed=Number(emp.normal_work_minutes)||525;
-          const elapsed=Number(rec.total_elapsed_minutes);
-          if(Number.isFinite(elapsed)&&elapsed>=normalElapsed) auto='Present';
         }
         if(auto){
           status=auto;
@@ -245,6 +242,7 @@ function timeMinutes(v){
 function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
   const a=timeMinutes(ni),b=timeMinutes(no);
   if(a===null||b===null)return {worked:null,ot:null};
+  if(!emp.split_shift&&b<a)return {worked:null,ot:null};
   let total=b-a+(b<a?1440:0);
   if(emp.split_shift){
     const c=timeMinutes(ni2),d=timeMinutes(no2);
@@ -546,6 +544,7 @@ async function saveAllChanges(){
       const no2=normalizeTime($('out2-'+emp.id).value);
       const status=$('a-'+emp.id).value;
       if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+'.');
+      if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+'.');
       if(split&&((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both IN 2 and OUT 2 for '+emp.name+'.');
       if(!split&&(ni2||no2))throw new Error('Second-shift times are only allowed for split-shift employees.');
       const er=effectiveRule(emp);
