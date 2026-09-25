@@ -232,3 +232,32 @@
   body[data-print-tab="attendanceReport"] #reportsTab{display:none!important}
   body[data-print-tab="attendanceReport"] #attendanceReportTab{display:block!important}
 }
+#reportsTab .otPersonReport{margin-bottom:14px}
+#reportsTab .otPersonTable{width:100%;border-collapse:collapse;min-width:0}
+#reportsTab .otPersonTable th,#reportsTab .otPersonTable td{border:1px solid #777;padding:4px 6px;font-size:12px}
+#reportsTab .otPersonTable .employeeHeading{background:#fff;text-align:left;font-size:14px}
+#reportsTab .otPersonTable th:not(.employeeHeading){background:#e5e7eb;text-align:center}
+#reportsTab .otPersonTable td{text-align:center}
+#reportsTab .otPersonTable td:first-child{text-align:left}
+#reportsTab .otPersonTable .reportSubtotal td,#reportsTab .otPersonTable .reportTotal td{font-weight:700;background:#eef1f4}
+#reportsTab .reportGrandTotal{font-weight:700;border:1px solid #777;padding:6px;text-align:center}
+@media print{
+  #reportsTab .otPersonReport{
+    page-break-after:always;
+    break-after:page;
+    margin:0;
+  }
+  #reportsTab .otPersonReport:last-of-type{page-break-after:auto;break-after:auto}
+  #reportsTab .otPersonTable th,#reportsTab .otPersonTable td{
+    font-size:8px!important;
+    padding:2.5px 4px!important;
+    line-height:1!important;
+    height:4.6mm!important;
+  }
+  #reportsTab .otPersonTable .employeeHeading{
+    font-size:11px!important;
+    height:6mm!important;
+  }
+  #reportsTab .otPersonTable th:not(.employeeHeading){font-size:8px!important}
+  #reportsTab .reportGrandTotal{font-size:8px!important}
+}
