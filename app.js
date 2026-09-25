@@ -201,7 +201,7 @@ function otReportHtml(data){
   let total=0;
   data.rows.forEach((r,i)=>{
     total+=r.minutes;
-    out+='<tr><td>'+r.no+'.</td><td>'+esc('Mr. '+r.employee.name)+'</td><td>'+Math.floor(r.minutes/60)+'</td><td>'+String(r.minutes%60).padStart(2,'0')+'</td><td></td><td></td></tr>';
+    out+='<tr><td>'+r.no+'.</td><td>'+esc(r.employee.name)+'</td><td>'+Math.floor(r.minutes/60)+'</td><td>'+String(r.minutes%60).padStart(2,'0')+'</td><td></td><td></td></tr>';
   });
   out+='<tr class="reportTotal"><td></td><td>Total</td><td>'+Math.floor(total/60)+'</td><td>'+String(total%60).padStart(2,'0')+'</td><td></td><td></td></tr>';
   return out;
@@ -213,7 +213,7 @@ async function generateReport(){
     const data=await getOTReportData();
     const label=new Date(data.month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
     $('reportTitle').textContent='DATA FOR WAGES COMPUTATION - CITY OFFICE';
-    $('reportSummary').textContent='PERIOD 01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(data.month+'-01T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/01\//,''); 
+    $('reportSummary').textContent='PERIOD 01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}); 
     $('reportTable').innerHTML=otReportHtml(data);
   }catch(e){$('reportTable').innerHTML='<tr><td>'+esc(e.message||'Unable to generate report.')+'</td></tr>'}
   finally{btn.disabled=false;btn.textContent='Generate'}
@@ -226,7 +226,7 @@ async function exportReport(){
     let total=0;
     for(const r of data.rows){
       total+=r.minutes;
-      rows.push([r.no,'Mr. '+r.employee.name,Math.floor(r.minutes/60),String(r.minutes%60).padStart(2,'0'),'','']);
+      rows.push([r.no,r.employee.name,Math.floor(r.minutes/60),String(r.minutes%60).padStart(2,'0'),'','']);
     }
     rows.push(['','Total',Math.floor(total/60),String(total%60).padStart(2,'0'),'','']);
     downloadCSV('FCS-OT-Report-'+data.month+'.csv',rows);
