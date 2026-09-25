@@ -518,7 +518,7 @@ $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>window.print();$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
