@@ -4,8 +4,8 @@ const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 function normalizeTime(v){
-  v=String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-  const m=v.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+  v=String(v||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');
+  const m=v.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);
   if(m){
     let h=Number(m[1]),min=Number(m[2]);
     if(min>59)return '';
@@ -17,6 +17,15 @@ function normalizeTime(v){
   if(d){const h=Number(d[1]),min=Number(d[2]);if(h<=23&&min<=59)return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0');}
   if(/^\d{1,2}$/.test(v)){const h=Number(v);if(h<=23)return String(h).padStart(2,'0')+':00';}
   return '';
+}
+function normalizeTimeFields(){
+  document.querySelectorAll('.timeEdit').forEach(el=>{
+    if(el.dataset.timeReady)return;
+    el.dataset.timeReady='1';
+    const format=()=>{if(el.value)el.value=normalizeTime(el.value)||el.value};
+    el.addEventListener('blur',format);
+    el.addEventListener('change',format);
+  });
 }
 function setupTimeInput(id,defaultValue){
   const el=$(id);if(!el)return;
@@ -129,6 +138,7 @@ async function loadRecords(){
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
   $('recordSummary').textContent=date+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
+  normalizeTimeFields();
 }
 
 function downloadCSV(name,rows){
@@ -237,6 +247,7 @@ async function saveAllChanges(){
   const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';
   try{
     const date=$('recordDate').value||today();
+    normalizeTimeFields();
     const [{data:emps,error:empError}]=await Promise.all([db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')]);
     if(empError)throw new Error(empError.message);
     const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
