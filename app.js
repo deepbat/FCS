@@ -530,6 +530,8 @@ async function saveAllChanges(){
   try{
     const date=$('recordDate').value||today();
     normalizeTimeFields();
+    await saveRules();
+    await loadRules();
     const [{data:emps,error:empError}]=await Promise.all([db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')]);
     if(empError)throw new Error(empError.message);
     const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
@@ -565,7 +567,6 @@ async function saveAllChanges(){
         if(result.error)throw new Error(result.error.message);
       }
     }
-    await saveRules();
     await Promise.all([loadRecords(),loadReportOptions()]);
     btn.textContent='Saved';setSaveStatus('saved');setTimeout(()=>btn.textContent='Save Changes',900);
   }catch(e){alert(e.message||'Unable to save changes.');btn.textContent='Save Changes';setSaveStatus('unsaved');}
