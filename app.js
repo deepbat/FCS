@@ -39,51 +39,6 @@ const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6000
 const monthNow=()=>today().slice(0,7);
 const monthRange=m=>{const d=new Date(m+'-01T00:00:00');return {start:m+'-01',end:new Date(d.getFullYear(),d.getMonth()+1,1).toISOString().slice(0,10)}};
 const fmtDate=d=>{const s=String(d||'');const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
-const DRAFT_KEY='fcs-attendance-drafts-v1';
-function loadDrafts(){try{return JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}')}catch{return {}}}
-function saveDrafts(x){localStorage.setItem(DRAFT_KEY,JSON.stringify(x))}
-function clearDrafts(){localStorage.removeItem(DRAFT_KEY)}
-function timeMinutes(v){const t=normalizeTime(v);if(!t)return null;const [h,m]=t.split(':').map(Number);return h*60+m}
-function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
-  const a=timeMinutes(ni),b=timeMinutes(no);if(a===null||b===null)return {worked:null,ot:null};
-  let total=b-a+(b<a?1440:0);
-  if(emp.split_shift){const c=timeMinutes(ni2||'06:00'),d=timeMinutes(no2);if(c!==null&&d!==null)total+=d-c+(d<c?1440:0)}
-  const rounded=emp.round_minutes>0?Math.round(total/emp.round_minutes)*emp.round_minutes:total;
-  const special=(emp.category==='Driver'||emp.category==='Gateman')&&(new Date(date+'T00:00:00').getDay()===0||isHoliday);
-  const worked=Math.max(0,rounded-(special?0:(emp.break_minutes||0)));
-  const ot=emp.category==='Driver'||emp.category==='Gateman'?(special?rounded:(rounded-(emp.normal_work_minutes||525)>15?rounded-(emp.normal_work_minutes||525):0)):0;
-  return {worked,ot};
-}
-function refreshLiveTotals(){
-  const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;let worked=0,ot=0;
-  document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
-    const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
-    const split=!!emp.split_shift,ni=split?$('in1-'+emp.id)?.value:$('in-'+emp.id)?.value,no=split?'01:00':$('out-'+emp.id)?.value,no2=split?$('out2-'+emp.id)?.value:'';
-    const live=calcLiveMinutes(emp,ni,no,split?'06:00':'',no2,date,isHoliday);
-    row.children[4].textContent=live.worked==null?'':fmtMin(live.worked);row.children[5].textContent=live.ot==null?'':fmtMin(live.ot);
-    if(live.worked!=null)worked+=live.worked;if(live.ot!=null)ot+=live.ot;
-  });
-  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total OT '+fmtMin(ot);
-}
-function captureCurrentDraft(){
-  const date=$('recordDate')?.value;if(!date||!document.querySelector('#recordsTable tr[data-employee-id]'))return;
-  const drafts=loadDrafts(),rows={};
-  document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
-    const id=row.dataset.employeeId,emp=window.__recordEmployees?.find(e=>e.id===id);if(!emp)return;
-    const split=!!emp.split_shift;
-    rows[id]={in:(split?$('in1-'+id)?.value:$('in-'+id)?.value)||'',out:(split?$('out2-'+id)?.value:$('out-'+id)?.value)||'',status:$('a-'+id)?.value||''};
-  });
-  drafts[date]=rows;saveDrafts(drafts);
-}
-function applyDrafts(date,recordMap,attMap){
-  const drafts=loadDrafts()[date]||{};
-  for(const [id,d] of Object.entries(drafts)){
-    const rec=recordMap.get(id)||{};
-    if(d.in||d.out)recordMap.set(id,{...rec,in_time:d.in?normalizeTime(d.in)+':00':rec.in_time,out_time:d.out?normalizeTime(d.out)+':00':rec.out_time});
-    if(d.status)attMap.set(id,d.status);
-  }
-}
-
 
 let employees=[],rules=[];
 const DB_NAME='fcs-attendance-local',STORE='pending',CACHE_KEY='fcs-attendance-cache';
@@ -159,9 +114,8 @@ async function loadRecords(){
     $('recordsTable').innerHTML='<tr><td>'+esc((empError||rowError)?.message||'Unable to load records.')+'</td></tr>';
     return;
   }
-  const list=emps||[]; window.__recordEmployees=list; window.__recordHoliday=(hols||[]).length>0; const recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
+  const list=emps||[], recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
   const attMap=new Map((att||[]).map(x=>[x.employee_id,x.status]));
-  applyDrafts(date,recordMap,attMap);
   const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
@@ -185,8 +139,6 @@ async function loadRecords(){
   $('recordSummary').textContent=date+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
-  document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>el.addEventListener('input',refreshLiveTotals));
-  refreshLiveTotals();
 }
 
 function downloadCSV(name,rows){
@@ -294,34 +246,37 @@ async function exportReport(){
 async function saveAllChanges(){
   const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';
   try{
-    captureCurrentDraft();
-    const drafts=loadDrafts(),dates=Object.keys(drafts);
-    if(!dates.length){btn.textContent='Saved';setTimeout(()=>btn.textContent='Save Changes',900);return}
-    const {data:emps,error:empError}=await db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name');
+    const date=$('recordDate').value||today();
+    normalizeTimeFields();
+    const [{data:emps,error:empError}]=await Promise.all([db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')]);
     if(empError)throw new Error(empError.message);
-    const empMap=new Map((emps||[]).map(e=>[e.id,e]));
-    for(const date of dates){
-      const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
-      if(existing.error)throw new Error(existing.error.message);
-      const idMap=new Map((existing.data||[]).map(r=>[r.employee_id,r.id]));
-      for(const [id,d] of Object.entries(drafts[date])){
-        const emp=empMap.get(id);if(!emp)continue;
-        const ni=normalizeTime(d.in),no=normalizeTime(d.out);
-        if((ni||no)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+' on '+fmtDate(date)+'.');
-        if(ni&&no){
-          const payload={in_time:ni+':00',out_time:no+':00'};
-          if(emp.split_shift){payload.in_time_2='06:00:00';payload.out_time_2=no+':00';}
-          const idExisting=idMap.get(id);
-          const result=idExisting?await db.from('daily_records').update(payload).eq('id',idExisting):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0});
-          if(result.error)throw new Error(result.error.message);
-        }
-        if(d.status){
-          const result=await db.from('attendance').upsert({work_date:date,employee_id:id,status:d.status},{onConflict:'work_date,employee_id'});
-          if(result.error)throw new Error(result.error.message);
-        }
+    const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
+    if(existing.error)throw new Error(existing.error.message);
+    const idMap=new Map((existing.data||[]).map(r=>[r.employee_id,r.id]));
+    for(const emp of emps||[]){
+      const row=document.querySelector('#recordsTable tr[data-employee-id="'+emp.id+'"]');if(!row)continue;
+      const split=!!emp.split_shift;
+      const ni=split?normalizeTime($('in1-'+emp.id).value):normalizeTime($('in-'+emp.id).value);
+      const no=split?'01:00':normalizeTime($('out-'+emp.id).value);
+      const ni2=split?'06:00':'';
+      const no2=split?normalizeTime($('out2-'+emp.id).value):'';
+      const status=$('a-'+emp.id).value;
+      if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+'.');
+      if(split&&((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both second-shift times for '+emp.name+'.');
+      if(ni&&no){
+        const payload={in_time:ni+':00',out_time:no+':00'};
+        if(split){payload.in_time_2=ni2?ni2+':00':null;payload.out_time_2=no2?no2+':00':null;}
+        const id=idMap.get(emp.id);
+        const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0});
+        if(result.error)throw new Error(result.error.message);
+      }
+      if(status){
+        const result=await db.from('attendance').upsert({work_date:date,employee_id:emp.id,status},{onConflict:'work_date,employee_id'});
+        if(result.error)throw new Error(result.error.message);
       }
     }
-    clearDrafts();await Promise.all([loadRecords(),loadReportOptions()]);
+    await saveRules();
+    await Promise.all([loadRecords(),loadReportOptions()]);
     btn.textContent='Saved';setTimeout(()=>btn.textContent='Save Changes',900);
   }catch(e){alert(e.message||'Unable to save changes.');btn.textContent='Save Changes';}
   finally{btn.disabled=false;}
@@ -385,7 +340,7 @@ function setupTabs(){
 $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
-$('refreshRecords').onclick=async()=>{captureCurrentDraft();await loadRecords()};$('recordDate').onchange=async()=>{captureCurrentDraft();await loadRecords()};$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
+$('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;setupTabs();
 
 (async()=>{
