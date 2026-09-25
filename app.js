@@ -278,7 +278,7 @@ function setupTabs(){
 $('workDate').value=today();$('monthFilter').value=monthNow();$('attendanceDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
-$('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('exportAttendance').onclick=exportAttendance;
+$('refreshRecords').onclick=loadRecords;$('recordEmployee').onchange=loadRecords;$('monthFilter').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;$('loadAttendance').onclick=loadAttendance;$('attendanceDate').onchange=loadAttendance;$('exportAttendance').onclick=exportAttendance;
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveRules').onclick=saveRules;setupTabs();
 
 (async()=>{
