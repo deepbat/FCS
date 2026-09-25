@@ -225,3 +225,10 @@
   #reportsTab .employeeHeading th{font-size:11px!important;padding-top:8px!important}
   #reportsTab .reportSubtotal td,#reportsTab .reportTotal td,#reportsTab .reportGrandTotal td{font-weight:700}
 }
+
+@media print{
+  body[data-print-tab="reports"] #attendanceReportTab{display:none!important}
+  body[data-print-tab="reports"] #reportsTab{display:block!important}
+  body[data-print-tab="attendanceReport"] #reportsTab{display:none!important}
+  body[data-print-tab="attendanceReport"] #attendanceReportTab{display:block!important}
+}
