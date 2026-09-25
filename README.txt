@@ -53,6 +53,7 @@ Under Time applies to OT-eligible employees when they are called early for offic
 - Example: IN at 7:30am = 1:30 UT.
 - IN at 8:40am or later gives no UT.
 - A person merely arriving slightly early, at or after 8:40am, does not receive UT.
+- Sunday and holiday duty never receives UT.
 - UT is not applied on Sunday or holiday duty.
 - UT is calculated from actual recorded IN time.
 
@@ -91,12 +92,17 @@ For Staff:
 - Gateman enters timings from the physical register.
 - Previous entries are not displayed to gateman.
 - Admin can review and edit daily records.
+- Admin changes are saved using the single Save Changes button.
+- Blank IN/OUT clears an existing daily timing record for that employee/date.
+- Split-shift employees show IN, OUT, IN 2 and OUT 2.
+- Non-split employees cannot save an OUT time earlier than IN.
 - Date and employee are used to identify each daily record.
 
 10. OFFLINE / MOBILE SYNC
 - Gateman app can save entries locally when internet is unavailable.
 - Pending entries are automatically uploaded when internet becomes available.
 - The app retries pending uploads automatically.
+- A duplicate employee/date conflict is not silently discarded; it remains pending for review.
 - Do not clear browser data or app storage while entries are pending.
 - "Synced" means pending local entries have been uploaded successfully.
 
@@ -116,6 +122,8 @@ For Staff:
 - Each employee has:
   Date | IN | OUT | IN 2 | OUT 2 | OT | UT
 - IN 2 and OUT 2 are used for split-shift employees such as Varinder Pal.
+- Sunday/holiday OT is full elapsed duty time with no break deduction.
+- Regular Driver/Gateman OT is based on OUT time after 5:45pm, with up to 15 minutes ignored. 6:00pm = 0 OT; 6:01pm = 16 minutes OT.
 - Blank dates remain blank.
 - Sub total shows separate OT and UT totals.
 - Total shows combined OT + UT.
