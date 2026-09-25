@@ -97,7 +97,7 @@ async function loadRecords(){
   const employeeId=$('recordEmployee').value;
   const [{data:emps},{data:rows,error},{data:att},{data:hols}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,employee_id').gte('work_date',dateStart).lt('holiday_date',end).order('work_date'),
+    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,employee_id').gte('work_date',dateStart).lt('work_date',end).order('work_date'),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',dateStart).lt('work_date',end),
     db.from('holidays').select('holiday_date,name').gte('holiday_date',dateStart).lt('holiday_date',end)
   ]);
