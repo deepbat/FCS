@@ -385,7 +385,8 @@ function fmtHHMM(mins){
   return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 }
 function utMinutesForRecord(record,holidaySet){
-  if(!record||holidaySet.has(record.work_date))return 0;
+  if(!record)return 0;
+  if(new Date(record.work_date+'T00:00:00').getDay()===0||holidaySet.has(record.work_date))return 0;
   const inMin=minutesFromHHMM(record.in_time);
   const earlyCutoff=8*60+40;
   const normalStart=9*60;
