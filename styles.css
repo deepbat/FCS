@@ -197,3 +197,19 @@
 .saveStatus.saving{color:#1d4ed8;font-weight:600}
 .saveStatus.saved{color:#166534;font-weight:600}
 @media(max-width:700px){.saveStatus{min-width:auto}}
+
+#attendanceReportTab .reportTotal td{font-weight:700;background:#eef1f4}
+@media print{
+  #attendanceReportTab{display:block!important;width:100%}
+  #reportsTab{display:none!important}
+  #attendanceReportTab .printTitle{display:block!important;text-align:center;font-size:14px;font-weight:700;margin:0 0 4px}
+  #attendanceReportTab .summary{display:block!important;text-align:center;font-size:10px;font-weight:700;padding:2px 0 7px}
+  #attendanceReportTab .tablewrap{overflow:visible!important;border:1px solid #555}
+  #attendanceReportTab .tablewrap table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse}
+  #attendanceReportTab th,#attendanceReportTab td{border:1px solid #777!important;padding:4px!important;font-size:8px!important;line-height:1.1!important;white-space:normal}
+  #attendanceReportTab th:nth-child(1),#attendanceReportTab td:nth-child(1){width:5%;text-align:center}
+  #attendanceReportTab th:nth-child(2),#attendanceReportTab td:nth-child(2){width:18%;text-align:left}
+  #attendanceReportTab th:nth-child(3),#attendanceReportTab td:nth-child(3){width:9%;text-align:center}
+  #attendanceReportTab th:nth-child(n+4),#attendanceReportTab td:nth-child(n+4){text-align:center}
+  #attendanceReportTab .reportTotal td{font-weight:700;background:#e5e7eb!important}
+}
