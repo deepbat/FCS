@@ -282,8 +282,8 @@ async function getMonthlyAttendanceData(){
   const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).order('name'),
     db.from('daily_records').select('work_date,employee_id').gte('work_date',start).lt('work_date',end),
-    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date'),
-    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date')
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
   ]);
   const err=empError||recError||attError||holError;
   if(err)throw new Error(err.message);
