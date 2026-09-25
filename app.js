@@ -90,7 +90,7 @@ async function checkSession(){
 }
 async function login(){const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('loginMessage').textContent=error?error.message:'Logged in';if(!error)await checkSession()}
 async function signup(){const {data,error}=await db.auth.signUp({email:$('email').value.trim(),password:$('password').value});$('loginMessage').textContent=error?error.message:(data.session?'Account created and logged in':'Account created. Check email if confirmation is required.')}
-async function loadAdmin(){await Promise.all([loadEmployeesAdmin(),loadRulesAdmin(),loadHolidays(),loadRecords()])}
+async function loadAdmin(){await Promise.all([loadEmployeesAdmin(),loadRulesAdmin(),loadHolidays(),loadRecords(),loadReportOptions()])}
 
 async function loadRecords(){
   const date=$('recordDate').value||today();
@@ -153,21 +153,84 @@ async function exportRecords(){
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
 }
 
+async function loadReportOptions(){
+  const {data}=await db.from('employees').select('id,name,category').eq('active',true).order('name');
+  const current=$('reportEmployee').value;
+  $('reportEmployee').innerHTML='<option value="">All Employees</option>'+(data||[]).map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+esc(e.category)+')</option>').join('');
+  if(current) $('reportEmployee').value=current;
+  $('reportMonth').value=monthNow();
+}
+
+async function generateReport(){
+  const month=$('reportMonth').value||monthNow(), employeeId=$('reportEmployee').value;
+  const {start,end}=monthRange(month);
+  const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError}]=await Promise.all([
+    db.from('employees').select('id,name,category').eq('active',true).order('name'),
+    db.from('daily_records').select('work_date,employee_id,worked_minutes,ot_minutes').gte('work_date',start).lt('work_date',end),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
+  ]);
+  if(empError||recError||attError){
+    $('reportTable').innerHTML='<tr><td>'+esc((empError||recError||attError)?.message||'Unable to generate report.')+'</td></tr>';
+    return;
+  }
+  const list=(emps||[]).filter(e=>!employeeId||e.id===employeeId);
+  const recordMap=new Map();
+  for(const r of records||[]) recordMap.set(r.employee_id+'|'+r.work_date,r);
+  const attMap=new Map();
+  for(const a of att||[]) attMap.set(a.employee_id+'|'+a.work_date,a.status);
+  let totalWorked=0,totalOt=0,totalDays=0;
+  const rows=[['Employee','Category','Present','First Half Leave','Second Half Leave','Full Day Leave','Absent','Leave','Sunday','Holiday','Days Worked','Total Worked','Total OT']];
+  for(const e of list){
+    const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
+    let worked=0,ot=0,daysWorked=0;
+    for(const a of att||[]){
+      if(a.employee_id!==e.id)continue;
+      if(counts[a.status]!==undefined)counts[a.status]++;
+    }
+    for(const r of records||[]){
+      if(r.employee_id!==e.id)continue;
+      worked+=Number(r.worked_minutes)||0;ot+=Number(r.ot_minutes)||0;daysWorked++;
+    }
+    totalWorked+=worked;totalOt+=ot;totalDays+=daysWorked;
+    rows.push([e.name,e.category,counts.Present,counts['First Half Leave'],counts['Second Half Leave'],counts['Full Day Leave'],counts.Absent,counts.Leave,counts.Sunday,counts.Holiday,daysWorked,fmtMin(worked),fmtMin(ot)]);
+  }
+  const monthLabel=new Date(month+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  $('reportTitle').textContent='Monthly Attendance and OT Report - '+monthLabel;
+  $('reportSummary').textContent=(employeeId?((list[0]?.name||'Employee')+' | '):'All Employees | ')+'Total Days Worked '+totalDays+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
+  $('reportTable').innerHTML=rows.map((r,i)=>'<tr>'+r.map(v=>i===0?'<th>'+esc(v)+'</th>':'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
+}
+
+async function exportReport(){
+  const month=$('reportMonth').value||monthNow(), employeeId=$('reportEmployee').value;
+  const {start,end}=monthRange(month);
+  const [{data:emps},{data:records},{data:att}]=await Promise.all([
+    db.from('employees').select('id,name,category').eq('active',true).order('name'),
+    db.from('daily_records').select('work_date,employee_id,worked_minutes,ot_minutes').gte('work_date',start).lt('work_date',end),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
+  ]);
+  const list=(emps||[]).filter(e=>!employeeId||e.id===employeeId);
+  const rows=[['Employee','Category','Present','First Half Leave','Second Half Leave','Full Day Leave','Absent','Leave','Sunday','Holiday','Days Worked','Total Worked','Total OT']];
+  for(const e of list){
+    const counts={Present:0,'First Half Leave':0,'Second Half Leave':0,'Full Day Leave':0,Absent:0,Leave:0,Sunday:0,Holiday:0};
+    let worked=0,ot=0,daysWorked=0;
+    for(const a of att||[])if(a.employee_id===e.id&&counts[a.status]!==undefined)counts[a.status]++;
+    for(const r of records||[])if(r.employee_id===e.id){worked+=Number(r.worked_minutes)||0;ot+=Number(r.ot_minutes)||0;daysWorked++;}
+    rows.push([e.name,e.category,counts.Present,counts['First Half Leave'],counts['Second Half Leave'],counts['Full Day Leave'],counts.Absent,counts.Leave,counts.Sunday,counts.Holiday,daysWorked,fmtMin(worked),fmtMin(ot)]);
+  }
+  downloadCSV('FCS-Monthly-Report-'+month+'.csv',rows);
+}
+
 async function saveAllChanges(){
-  const btn=$('saveAllBtn');
-  btn.disabled=true;btn.textContent='Saving...';
+  const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';
   try{
     const date=$('recordDate').value||today();
-    const [{data:emps,error:empError}]=await Promise.all([
-      db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')
-    ]);
+    const [{data:emps,error:empError}]=await Promise.all([db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')]);
     if(empError)throw new Error(empError.message);
     const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
     if(existing.error)throw new Error(existing.error.message);
     const idMap=new Map((existing.data||[]).map(r=>[r.employee_id,r.id]));
     for(const emp of emps||[]){
-      const row=document.querySelector('#recordsTable tr[data-employee-id="'+emp.id+'"]');
-      if(!row)continue;
+      const row=document.querySelector('#recordsTable tr[data-employee-id="'+emp.id+'"]');if(!row)continue;
       const split=!!emp.split_shift;
       const ni=split?normalizeTime($('in1-'+emp.id).value):normalizeTime($('in-'+emp.id).value);
       const no=split?'01:00':normalizeTime($('out-'+emp.id).value);
@@ -180,9 +243,7 @@ async function saveAllChanges(){
         const payload={in_time:ni+':00',out_time:no+':00'};
         if(split){payload.in_time_2=ni2?ni2+':00':null;payload.out_time_2=no2?no2+':00':null;}
         const id=idMap.get(emp.id);
-        const result=id
-          ?await db.from('daily_records').update(payload).eq('id',id)
-          :await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0});
+        const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload,break_minutes:emp.break_minutes??0,normal_work_minutes:emp.normal_work_minutes??525,ot_eligible:emp.category==='Driver'||emp.category==='Gateman',ot_threshold_minutes:15,round_minutes:emp.round_minutes??0});
         if(result.error)throw new Error(result.error.message);
       }
       if(status){
@@ -190,12 +251,11 @@ async function saveAllChanges(){
         if(result.error)throw new Error(result.error.message);
       }
     }
-    await loadRecords();
+    await saveRules();
+    await Promise.all([loadRecords(),loadReportOptions()]);
     btn.textContent='Saved';setTimeout(()=>btn.textContent='Save Changes',900);
-  }catch(e){
-    alert(e.message||'Unable to save changes.');
-    btn.textContent='Save Changes';
-  }finally{btn.disabled=false;}
+  }catch(e){alert(e.message||'Unable to save changes.');btn.textContent='Save Changes';}
+  finally{btn.disabled=false;}
 }
 
 async function loadEmployeesAdmin(){
@@ -257,7 +317,7 @@ $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('refreshRecords').onclick=loadRecords;$('recordDate').onchange=loadRecords;$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>window.print();$('exportReport').onclick=exportReport;$('reportMonth').onchange=generateReport;$('reportEmployee').onchange=generateReport;setupTabs();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
