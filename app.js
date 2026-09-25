@@ -82,18 +82,41 @@ async function updatePending(){const q=await localAll();$('pendingCount').textCo
 function saveCache(){localStorage.setItem(CACHE_KEY,JSON.stringify({employees,rules}))}
 function loadCache(){try{const x=JSON.parse(localStorage.getItem(CACHE_KEY)||'{}');employees=x.employees||[];rules=x.rules||[]}catch{}}
 
+let syncingQueue=false;
 async function syncQueue(){
-  if(!navigator.onLine)return;
-  const q=await localAll();if(!q.length){await updatePending();$('syncStatus').textContent='Synced';return}
+  if(syncingQueue||!navigator.onLine)return;
+  const q=await localAll();
+  if(!q.length){await updatePending();$('syncStatus').textContent='Synced';return}
+  syncingQueue=true;
   $('syncStatus').textContent='Syncing...';
-  for(const row of q){
-    const {error}=await db.from('daily_records').insert(row);
-    if(!error||error.code==='23505')await localDelete(row.client_id);
+  let failed=0;
+  try{
+    for(let i=0;i<q.length;i+=10){
+      const batch=q.slice(i,i+10);
+      const results=await Promise.all(batch.map(async row=>{
+        try{
+          const {error}=await db.from('daily_records').insert(row);
+          if(!error||error.code==='23505'){
+            await localDelete(row.client_id);
+            return true;
+          }
+        }catch{}
+        return false;
+      }));
+      failed+=results.filter(x=>!x).length;
+    }
+  }finally{
+    syncingQueue=false;
   }
-  await updatePending();$('syncStatus').textContent='Synced';
+  await updatePending();
+  const pending=await localAll();
+  $('syncStatus').textContent=pending.length?(failed?'Sync pending':'Syncing...'):'Synced';
 }
 window.addEventListener('online',syncQueue);
 window.addEventListener('offline',()=>{$('syncStatus').textContent='Offline'});
+window.addEventListener('focus',syncQueue);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncQueue()});
+setInterval(syncQueue,30000);
 
 async function loadEmployees(){
   const {data,error}=await db.from('employees').select('id,employee_code,name,category,active').eq('active',true).order('name');
