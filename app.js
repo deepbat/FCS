@@ -353,7 +353,7 @@ async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError}]=await Promise.all([
-    db.from('employees').select('id,name,category').eq('active',true).order('name'),
+    db.from('employees').select('id,name,category').eq('active',true).in('category',['Driver','Gateman']).order('name'),
     db.from('daily_records').select('work_date,employee_id,ot_minutes').gte('work_date',start).lt('work_date',end)
   ]);
   const err=empError||recError;
