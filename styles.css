@@ -299,3 +299,5 @@
 .adjustEdit:focus{border-color:#c7cdd4;background:#fff;outline:none;box-shadow:none}
 #personRegisterTable .adjustEdit{width:82px}
 #recordsTable .adjustEdit{width:82px}
+
+.sundayRow td,.sundayCell{background:#f1f1f1!important}.holidayRow td,.holidayCell{background:#e8f1ff!important}.leaveRow td{background:#fff6d9!important}.personTotal td{background:#e9ecef!important;font-weight:600}.adminReadme{text-align:center;margin:24px 0 8px}.readmePanel{margin:8px 0}.readmePanel .card{max-width:900px}.readmePanel li{margin:7px 0}
