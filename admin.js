@@ -97,7 +97,7 @@ function datesForMonth(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap"><table id="regTable"></table></div>';
+ $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap"><table id="regTable"></table></div><div id="grandTotal" class="summary"></div>';
  $('month').onchange=e=>{month=e.target.value;activeEmployee=0;renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();
@@ -108,7 +108,7 @@ function renderRegister(){
  rows.forEach(date=>{const d=getDraft(date,e.id);const rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="out_time" value="'+esc(d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'});
  h+='</tbody>';$('regTable').innerHTML=h;
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));
- updateRegSummary(e,rows);
+ updateRegSummary(e,rows);updateGrandTotal();
 }
 function editCell(tr,e){
  const date=tr.dataset.date,d=getDraft(date,e.id);
@@ -122,10 +122,12 @@ function editCell(tr,e){
  if(d.ut_override==null)d.ut=c.ut;
  if(d.sl_override==null)d.sl=c.sl;
  if(d.ot_override==null)d.ot=c.ot;
- markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());
+ markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
 function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
-function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='OT: '+fmtMin(ot)+'   UT: '+fmtMin(ut)+'   SL: '+fmtMin(sl)}
+function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl)}
+function totalsForAll(){let ot=0,ut=0,sl=0;const rows=datesForMonth();employees.filter(e=>e.active).forEach(e=>rows.forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0}));return {ot,ut,sl}}
+function updateGrandTotal(){const x=$('grandTotal');if(!x)return;const t=totalsForAll();x.textContent='Grand Total (All People):  OT '+fmtMin(t.ot)+'   UT '+fmtMin(t.ut)+'   SL '+fmtMin(t.sl)}
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
  let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
@@ -180,6 +182,12 @@ function exportEmployee(){
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
  });
+ const totals=totalsForAll();
+ const grandRows=employees.filter(e=>e.active).map(e=>{let ot=0,ut=0,sl=0;datesForMonth().forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0});return {Employee:e.name,OT:fmtMin(ot),UT:fmtMin(ut),SL:fmtMin(sl)}});
+ grandRows.push({Employee:'GRAND TOTAL',OT:fmtMin(totals.ot),UT:fmtMin(totals.ut),SL:fmtMin(totals.sl)});
+ const totalWs=XLSX.utils.json_to_sheet(grandRows,{header:['Employee','OT','UT','SL']});
+ totalWs['!cols']=[{wch:24},{wch:12},{wch:12},{wch:12}];
+ XLSX.utils.book_append_sheet(wb,totalWs,'Grand Total');
  XLSX.writeFile(wb,'FCS_Attendance_'+month+'.xlsx');
 }
 (async()=>{
