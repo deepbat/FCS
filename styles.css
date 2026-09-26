@@ -265,3 +265,32 @@
 #recordsTable th,#recordsTable td,#reportsTab .otPersonTable th,#reportsTab .otPersonTable td{width:auto}
 
 .dateArrow{min-width:42px;padding-left:10px;padding-right:10px;font-size:20px;line-height:1}
+
+.recordModes{display:flex;gap:0;margin:0 0 10px;border-bottom:1px solid #c7cdd4}
+.recordModes button{border-radius:0;border:1px solid #c7cdd4;border-bottom:0}
+.recordModes .activeMode{background:#fff;font-weight:700}
+.personToolbar{align-items:stretch}
+.personToolbar>input{width:150px;max-width:150px}
+.personTabs{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:180px}
+.personTab{white-space:nowrap;padding:8px 12px;border-radius:6px}
+.personTab.active{background:#111827;color:#fff}
+#personRegisterTable{table-layout:fixed;min-width:850px}
+#personRegisterTable th,#personRegisterTable td{text-align:left}
+#personRegisterTable th:nth-child(1),#personRegisterTable td:nth-child(1){width:13%}
+#personRegisterTable th:nth-child(2),#personRegisterTable td:nth-child(2){width:15%}
+#personRegisterTable th:nth-child(3),#personRegisterTable td:nth-child(3){width:12%}
+#personRegisterTable th:nth-child(4),#personRegisterTable td:nth-child(4){width:15%}
+#personRegisterTable th:nth-child(5),#personRegisterTable td:nth-child(5){width:12%}
+#personRegisterTable th:nth-child(6),#personRegisterTable td:nth-child(6){width:12%}
+#personRegisterTable th:nth-child(7),#personRegisterTable td:nth-child(7){width:21%}
+@media(max-width:700px){.personToolbar{flex-wrap:wrap}.personTabs{order:3;flex-basis:100%;min-width:100%}.personToolbar>input{width:150px}.recordModes button{flex:1}}
+@media print{
+  body[data-print-tab="personRegister"] #dailyCheckPane,
+  body[data-print-tab="personRegister"] .recordModes{display:none!important}
+  body[data-print-tab="personRegister"] #personRegisterPane{display:block!important}
+  body[data-print-tab="personRegister"] #personTitle{display:block!important}
+  body[data-print-tab="personRegister"] #personSummary{display:block!important}
+  body[data-print-tab="personRegister"] #personRegisterTable{min-width:0;width:100%}
+  body[data-print-tab="personRegister"] .personIn,
+  body[data-print-tab="personRegister"] .personOut{border:0;padding:0;background:transparent}
+}
