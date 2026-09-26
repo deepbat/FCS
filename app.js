@@ -40,7 +40,12 @@ function adjustmentInputValue(v){return v==null?'':fmtMin(v)}
 function effectiveAdjustment(rec,field,calculated){return rec&&rec[field]!=null?Number(rec[field]):Math.max(0,Math.round(Number(calculated)||0));}
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const monthNow=()=>today().slice(0,7);
-const monthRange=m=>{const d=new Date(m+'-01T00:00:00');return {start:m+'-01',end:new Date(d.getFullYear(),d.getMonth()+1,1).toISOString().slice(0,10)}};
+const monthRange=m=>{
+  const [y,mo]=String(m||monthNow()).split('-').map(Number);
+  const ny=mo===12?y+1:y,nm=mo===12?1:mo+1;
+  return {start:y+'-'+String(mo).padStart(2,'0')+'-01',end:ny+'-'+String(nm).padStart(2,'0')+'-01'};
+};
+const dateKeyLocal=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const fmtDate=d=>{const s=String(d||'');const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
 
 let employees=[],rules=[];
@@ -269,21 +274,48 @@ function personMoveEmployee(delta){
   loadPersonRegister();
 }
 
-function exportPersonRegister(){
-  const emp=personEmployees[personEmployeeIndex];if(!emp)return;
+async function exportPersonRegister(){
   const month=$('personMonth').value||monthNow();
-  const rows=[['Date','In Time','UT','Out Time','SL','OT','Attendance']];
-  document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(row=>{
-    rows.push([fmtDate(row.dataset.date),row.querySelector('.personIn')?.value||'',row.querySelector('.personUT')?.textContent||'',row.querySelector('.personOut')?.value||'',row.querySelector('.personSL')?.textContent||'',row.querySelector('.personOT')?.textContent||'',row.querySelector('.personAttendance')?.value||'']);
-  });
-  if(window.XLSX){
-    const ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,(emp.name||'Employee').slice(0,31));
-    XLSX.writeFile(wb,(emp.name||'Employee')+'_'+month+'.xlsx');
-  }else{
-    const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
-    const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=(emp.name||'Employee')+'_'+month+'.csv';a.click();
-  }
+  try{
+    const {start,end}=monthRange(month);
+    const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
+      db.from('employees').select('id,employee_code,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('employee_code').order('name'),
+      db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ut_override_minutes,sl_override_minutes,ot_override_minutes').gte('work_date',start).lt('work_date',end),
+      db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
+      db.from('holidays').select('holiday_date,name').gte('work_date',start).lt('work_date',end)
+    ]);
+    const err=empError||recError||attError||holError;if(err)throw new Error(err.message);
+    if(!window.XLSX)throw new Error('Excel export library is not available.');
+    const recordMap=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
+    const attMap=new Map((att||[]).map(r=>[r.work_date+'|'+r.employee_id,r.status]));
+    const holidaySet=new Set((hols||[]).map(h=>h.holiday_date));
+    const wb=XLSX.utils.book_new(),used=new Set();
+    const days=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
+    for(const emp of emps||[]){
+      const rows=[['Date','In Time','UT','Out Time','SL','OT','Attendance']];
+      for(let day=1;day<=days;day++){
+        const date=month+'-'+String(day).padStart(2,'0');
+        const rec=recordMap.get(date+'|'+emp.id);
+        const explicit=attMap.get(date+'|'+emp.id);
+        const status=attendanceStatusForRecord(emp,rec,date,explicit,holidaySet.has(date));
+        const inTime=rec?.in_time?.slice(0,5)||'';
+        const outTime=emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||'');
+        const firstOut=emp.split_shift?(rec?.out_time?.slice(0,5)||''):'';
+        const in2=emp.split_shift?(rec?.in_time_2?.slice(0,5)||''):'';
+        const live=rec?calcLiveMinutes(emp,inTime,emp.split_shift?firstOut:outTime,emp.split_shift?in2:'',emp.split_shift?outTime:'',date,holidaySet.has(date)):null;
+        const adj=dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date));
+        const ut=effectiveAdjustment(rec,'ut_override_minutes',adj.ut);
+        const sl=effectiveAdjustment(rec,'sl_override_minutes',adj.sl);
+        const ot=effectiveAdjustment(rec,'ot_override_minutes',live?.ot??(rec?Number(rec.ot_minutes)||0:0));
+        rows.push([fmtDate(date),inTime,fmtMin(ut),outTime,fmtMin(sl),fmtMin(ot),status]);
+      }
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:20}];
+      XLSX.utils.book_append_sheet(wb,ws,safeSheetName(emp.name,used));
+    }
+    if(!wb.SheetNames.length)throw new Error('No active employees.');
+    XLSX.writeFile(wb,'FCS-Person-Register-'+month+'.xlsx');
+  }catch(e){alert(e.message||'Unable to export person register.')}
 }
 
 const DB_NAME='fcs-attendance-local',STORE='pending',CACHE_KEY='fcs-attendance-cache';
@@ -475,7 +507,7 @@ async function getMonthlyAttendanceData(){
   const days=[];
   if(cutoff){
     const d=new Date(start+'T00:00:00'),last=new Date(cutoff+'T00:00:00');
-    while(d<=last){days.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}
+    while(d<=last){days.push(dateKeyLocal(d));d.setDate(d.getDate()+1)}
   }
 
   const recordMap=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
