@@ -240,7 +240,7 @@ async function loadRecords(){
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
   const autoAttendance=[];
-  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>UT</th><th>OT</th><th>SL</th><th>Net</th><th>Attendance</th></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     const draft=draftFor(date,emp.id);
@@ -271,7 +271,7 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td></td><td></td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
@@ -342,17 +342,14 @@ function refreshLiveTotals(){
       ?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday)
       :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
     const adj=dailyTimeAdjustments(emp,ni,date,isHoliday);
-    const net=adj.ut+live.ot-adj.sl;
-    row.children[4].textContent=live.worked==null?'':fmtMin(live.worked);
-    row.children[5].textContent=live.worked==null?'':fmtMin(adj.ut);
-    row.children[6].textContent=live.ot==null?'':fmtMin(live.ot);
-    row.children[7].textContent=live.worked==null?'':fmtMin(adj.sl);
-    row.children[8].textContent=live.worked==null?'':signedMinutesText(net);
+    row.children[4].textContent=live.worked==null?'':fmtMin(adj.ut);
+    row.children[6].textContent=live.worked==null?'':fmtMin(adj.sl);
+    row.children[7].textContent=live.worked==null?'':fmtMin(live.ot);
     if(live.worked!=null)worked+=live.worked;
     if(live.ot!=null)ot+=live.ot;
     ut+=adj.ut;sl+=adj.sl;
   });
-  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl)+' | Net '+signedMinutesText(ut+ot-sl);
+  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl);
 }
 function downloadCSV(name,rows){
   const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
@@ -367,14 +364,14 @@ async function exportRecords(){
   ]);
   const recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
   const attMap=new Map((att||[]).map(r=>[r.employee_id,r.status]));
-  const rowsOut=[['Date','Employee','Category','IN','OUT','Worked','UT','OT','SL','Net','Attendance']];
+  const rowsOut=[['Date','Employee','Category','In Time','UT','Out Time','SL','OT','Attendance']];
   for(const e of emps||[]){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
     const adj=r?dailyTimeAdjustments(e,inValue,date,false):{ut:0,sl:0};
     const ot=r?Number(r.ot_minutes)||0:0;
-    rowsOut.push([fmtDate(date),e.name,e.category,inValue,outValue,r?fmtMin(r.worked_minutes):'',fmtHHMM(adj.ut),fmtHHMM(ot),fmtHHMM(adj.sl),signedMinutesText(adj.ut+ot-adj.sl),attMap.get(e.id)||'']);
+    rowsOut.push([fmtDate(date),e.name,e.category,inValue,fmtHHMM(adj.ut),outValue,fmtHHMM(adj.sl),fmtHHMM(ot),attMap.get(e.id)||'']);
   }
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
 }
@@ -586,15 +583,14 @@ function otReportHtml(data){
     grandOT+=r.otTotal;grandUT+=r.utTotal;grandSL+=r.slTotal;
     out+='<div class="otPersonReport">';
     out+='<table class="otPersonTable"><tr><th colspan="7" class="employeeHeading">'+esc(r.employee.name)+'</th></tr>';
-    out+='<tr><th>Date</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>UT</th><th>OT</th><th>SL</th><th>Net</th></tr>';
+    out+='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
     r.days.forEach(d=>{
-      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+esc(d.out1)+'</td><td>'+esc(d.in2)+'</td><td>'+esc(d.out2)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+signedMinutesText(d.net)+'</td></tr>';
+      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+esc(d.out2||d.out1)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+fmtHHMM(d.ot)+'</td><td></td></tr>';
     });
-    out+='<tr class="reportSubtotal"><td>Sub total</td><td colspan="4"></td><td>'+fmtHHMM(r.utTotal)+'</td><td>'+fmtHHMM(r.otTotal)+'</td><td>'+fmtHHMM(r.slTotal)+'</td><td>'+signedMinutesText(r.total)+'</td></tr>';
-    out+='<tr class="reportTotal"><td>Net Total</td><td colspan="7"></td><td>'+signedMinutesText(r.total)+'</td></tr>';
+    out+='<tr class="reportSubtotal"><td>Sub total</td><td></td><td>'+fmtHHMM(r.utTotal)+'</td><td></td><td>'+fmtHHMM(r.slTotal)+'</td><td>'+fmtHHMM(r.otTotal)+'</td><td></td></tr>';
     out+='</table></div>';
   });
-  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: UT '+fmtHHMM(grandUT)+' + OT '+fmtHHMM(grandOT)+' - SL '+fmtHHMM(grandSL)+' = '+signedMinutesText(grandUT+grandOT-grandSL)+'</div>';
+  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: UT '+fmtHHMM(grandUT)+' + OT '+fmtHHMM(grandOT)+' + SL '+fmtHHMM(grandSL)+'</div>';
   return out||'<div class="muted">No OT or UT for selected employees.</div>';
 }
 function safeSheetName(name,used){
@@ -626,13 +622,12 @@ async function exportReport(){
         ['Category',r.employee.category],
         ['Period','01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})],
         [],
-        ['Date','IN','OUT','IN 2','OUT 2','UT','OT','SL','Net']
+        ['Date','In Time','UT','Out Time','SL','OT','Attendance']
       ];
-      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,d.out1,d.in2,d.out2,fmtHHMM(d.ut),fmtHHMM(d.ot),fmtHHMM(d.sl),signedMinutesText(d.net)]));
-      aoa.push(['Sub total','','','','',fmtHHMM(r.utTotal),fmtHHMM(r.otTotal),fmtHHMM(r.slTotal),signedMinutesText(r.total)]);
-      aoa.push(['Net Total','','','','','','','',signedMinutesText(r.total)]);
+      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,fmtHHMM(d.ut),d.out2||d.out1,fmtHHMM(d.sl),fmtHHMM(d.ot),'']));
+      aoa.push(['Sub total','',fmtHHMM(r.utTotal),'',fmtHHMM(r.slTotal),fmtHHMM(r.otTotal),'']);
       const ws=XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols']=[{wch:14},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10},{wch:10},{wch:10}];
+      ws['!cols']=[{wch:14},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10},{wch:16}];
       XLSX.utils.book_append_sheet(wb,ws,safeSheetName(r.employee.name,used));
     }
     if(!wb.SheetNames.length)throw new Error('No employees selected.');
