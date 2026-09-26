@@ -845,10 +845,10 @@ function setupTabs(){
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tabpane').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab+'Tab').classList.remove('hidden')});
 }
 
-$('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');setupTimeInput('inTime2','');setupTimeInput('outTime2','');
+$('workDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');setupTimeInput('inTime2','');setupTimeInput('outTime2','');
 $('employee').onchange=()=>{updateGateSplitFields();$('inTime').value='09:00';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value=''};
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
-$('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};loadRecords()};loadRecords()};$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
+$('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
 $('readmeBtn').onclick=()=>{$('readmePanel').classList.toggle('hidden')};$('closeReadmeBtn').onclick=()=>{$('readmePanel').classList.add('hidden')};
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();setupPersonRegister();
 
