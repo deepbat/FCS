@@ -261,3 +261,5 @@
   #reportsTab .otPersonTable th:not(.employeeHeading){font-size:8px!important}
   #reportsTab .reportGrandTotal{font-size:8px!important}
 }
+#recordsTable,#reportsTab .otPersonTable{table-layout:fixed}
+#recordsTable th,#recordsTable td,#reportsTab .otPersonTable th,#reportsTab .otPersonTable td{width:auto}
