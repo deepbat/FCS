@@ -184,10 +184,11 @@ async function loadRecords(){
   const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
   window.__recordEmployees=list;
   window.__recordHoliday=holiday;
+  window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
-  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     let status=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
@@ -216,9 +217,7 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,rec?.in_time?.slice(0,5));
     const out1=input('out-'+emp.id,rec?.out_time?.slice(0,5));
-    const in2=input('in2-'+emp.id,rec?.in_time_2?.slice(0,5));
-    const out2=input('out2-'+emp.id,rec?.out_time_2?.slice(0,5));
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+in2+'</td><td>'+out2+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
@@ -277,10 +276,10 @@ function refreshLiveTotals(){
     const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
     const ni=$('in-'+emp.id)?.value;
     const no=$('out-'+emp.id)?.value;
-    const ni2=$('in2-'+emp.id)?.value;
-    const no2=$('out2-'+emp.id)?.value;
+    const ni2=emp.split_shift?((window.__recordSecondShift?.get(emp.id)?.in_time_2||'').slice(0,5)):'';
+    const no2=emp.split_shift?((window.__recordSecondShift?.get(emp.id)?.out_time_2||'').slice(0,5)):'';
     const live=calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday);
-    const workedCell=row.children[6],otCell=row.children[7];
+    const workedCell=row.children[4],otCell=row.children[5];
     workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
     otCell.textContent=live.ot==null?'':fmtMin(live.ot);
     if(live.worked!=null)worked+=live.worked;
@@ -538,7 +537,7 @@ async function saveAllChanges(){
     await loadRules();
     const [{data:emps,error:empError}]=await Promise.all([db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name')]);
     if(empError)throw new Error(empError.message);
-    const existing=await db.from('daily_records').select('id,employee_id').eq('work_date',date);
+    const existing=await db.from('daily_records').select('id,employee_id,in_time_2,out_time_2').eq('work_date',date);
     if(existing.error)throw new Error(existing.error.message);
     const idMap=new Map((existing.data||[]).map(r=>[r.employee_id,r.id]));
     for(const emp of emps||[]){
@@ -555,7 +554,8 @@ async function saveAllChanges(){
       if(!split&&(ni2||no2))throw new Error('Second-shift times are only allowed for split-shift employees.');
       const er=effectiveRule(emp);
       if(ni&&no){
-        const payload={in_time:ni+':00',out_time:no+':00',in_time_2:split?(ni2?ni2+':00':null):null,out_time_2:split?(no2?no2+':00':null):null,break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
+        const existingRow=(existing.data||[]).find(r=>r.employee_id===emp.id);
+        const payload={in_time:ni+':00',out_time:no+':00',in_time_2:split?(existingRow?.in_time_2||null):null,out_time_2:split?(existingRow?.out_time_2||null):null,break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
         const id=idMap.get(emp.id);
         const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload});
         if(result.error)throw new Error(result.error.message);
