@@ -520,15 +520,17 @@ function dailyAdjustments(emp,record,date,isHoliday){
 async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
-  const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError}]=await Promise.all([
+  const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError},{data:atts,error:attError}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).in('category',['Driver','Gateman']).order('name'),
     db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes').gte('work_date',start).lt('work_date',end),
-    db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end)
+    db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
   ]);
-  const err=empError||recError||holError;
+  const err=empError||recError||holError||attError;
   if(err)throw new Error(err.message);
   const holidaySet=new Set((hols||[]).map(h=>h.holiday_date));
   const byKey=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
+  const attendanceByKey=new Map((atts||[]).map(a=>[a.work_date+'|'+a.employee_id,a.status]));
   const totals=new Map();
   for(const e of emps||[]){
     let ot=0,ut=0,sl=0;
@@ -540,7 +542,7 @@ async function getOTReportBase(){
     }
     totals.set(e.id,{ot,ut,sl,net:ut+ot-sl});
   }
-  return {month,emps:emps||[],records:records||[],holidaySet,byKey,totals};
+  return {month,emps:emps||[],records:records||[],holidaySet,byKey,attendanceByKey,totals};
 }
 async function loadReportOptions(){
   try{
@@ -570,7 +572,7 @@ async function getOTReportData(){
       const ut=utMinutesForRecord(r,base.holidaySet);
       const sl=slMinutesForRecord(r,e,base.holidaySet);
       otTotal+=ot;utTotal+=ut;slTotal+=sl;
-      days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,net:ut+ot-sl});
+      days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,attendance:base.attendanceByKey.get(date+'|'+e.id)||''});
     }
     return {no:i+1,employee:e,days,otTotal,utTotal,slTotal,total:otTotal+utTotal-slTotal};
   }).filter(r=>!$('otOnly').checked||(r.otTotal+r.utTotal+r.slTotal)>0);
@@ -585,7 +587,7 @@ function otReportHtml(data){
     out+='<table class="otPersonTable"><tr><th colspan="7" class="employeeHeading">'+esc(r.employee.name)+'</th></tr>';
     out+='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
     r.days.forEach(d=>{
-      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+esc(d.out2||d.out1)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+fmtHHMM(d.ot)+'</td><td></td></tr>';
+      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+esc(d.out2||d.out1)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+esc(d.attendance)+'</td></tr>';
     });
     out+='<tr class="reportSubtotal"><td>Sub total</td><td></td><td>'+fmtHHMM(r.utTotal)+'</td><td></td><td>'+fmtHHMM(r.slTotal)+'</td><td>'+fmtHHMM(r.otTotal)+'</td><td></td></tr>';
     out+='</table></div>';
@@ -624,7 +626,7 @@ async function exportReport(){
         [],
         ['Date','In Time','UT','Out Time','SL','OT','Attendance']
       ];
-      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,fmtHHMM(d.ut),d.out2||d.out1,fmtHHMM(d.sl),fmtHHMM(d.ot),'']));
+      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,fmtHHMM(d.ut),d.out2||d.out1,fmtHHMM(d.sl),fmtHHMM(d.ot),d.attendance]));
       aoa.push(['Sub total','',fmtHHMM(r.utTotal),'',fmtHHMM(r.slTotal),fmtHHMM(r.otTotal),'']);
       const ws=XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols']=[{wch:14},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10},{wch:16}];
