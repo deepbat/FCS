@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>FCS Attendance - Admin Login</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;color:#111827}
+main{max-width:520px;margin:60px auto;padding:16px}.card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
+h1{margin:0 0 6px;font-size:24px}p{color:#6b7280}label{display:block;font-weight:600;font-size:14px;margin:16px 0 6px}
+input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:9px;font:inherit}
+button{width:100%;padding:12px;border:0;border-radius:9px;font:inherit;cursor:pointer;margin-top:18px;background:#111827;color:#fff}
+.secondary{background:#e5e7eb;color:#111827}.message{min-height:22px;color:#166534}.error{color:#b91c1c}
+</style>
+</head>
+<body>
+<main><div class="card">
+<h1>FCS Attendance</h1><p>Admin Login</p>
+<label>Email</label><input id="email" type="email" autocomplete="username">
+<label>Password</label><input id="password" type="password" autocomplete="current-password">
+<button id="login">Login</button>
+<button class="secondary" id="back">Back</button>
+<p id="message" class="message"></p>
+</div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const db=supabase.createClient('https://raesuqidwkcpylvqiftf.supabase.co','sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF');
+const message=document.getElementById('message');
+document.getElementById('back').onclick=()=>location.href='./';
+document.getElementById('login').onclick=async()=>{
+  const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;
+  if(!email||!password){message.textContent='Enter email and password.';message.className='message error';return}
+  const btn=document.getElementById('login');btn.disabled=true;btn.textContent='Logging in...';
+  const {error}=await db.auth.signInWithPassword({email,password});
+  if(error){message.textContent=error.message;message.className='message error';btn.disabled=false;btn.textContent='Login';return}
+  location.href='./?admin=1';
+};
+</script>
+</body>
+</html>
