@@ -545,8 +545,11 @@ async function saveAllChanges(){
       const split=!!emp.split_shift;
       const ni=normalizeTime($('in-'+emp.id).value);
       const no=normalizeTime($('out-'+emp.id).value);
-      const ni2=normalizeTime($('in2-'+emp.id).value);
-      const no2=normalizeTime($('out2-'+emp.id).value);
+      // Second-shift times are stored in the background for split-shift employees such as Varinder.
+      // Daily Register does not display IN 2 / OUT 2, so preserve existing values here.
+      const existingRow=idMap.has(emp.id)?(existing.data||[]).find(r=>r.id===idMap.get(emp.id)):null;
+      const ni2=split?(existingRow?.in_time_2?String(existingRow.in_time_2).slice(0,5):''):'';
+      const no2=split?(existingRow?.out_time_2?String(existingRow.out_time_2).slice(0,5):''):'';
       const status=$('a-'+emp.id).value;
       if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+'.');
       if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+'.');
