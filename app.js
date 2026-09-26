@@ -393,7 +393,7 @@ async function exportRecords(){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    const adj=r?{ut:Number(r.ut_minutes)||0,sl:Number(r.sl_minutes)||0}:{ut:0,sl:0};
+    const adj=r?{ut:e.name==='Gautam'?0:Number(r.ut_minutes)||0,sl:Number(r.sl_minutes)||0}:{ut:0,sl:0};
     const ot=r?Number(r.ot_minutes)||0:0;
     rowsOut.push([fmtDate(date),e.name,e.category,inValue,fmtHHMM(adj.ut),outValue,fmtHHMM(adj.sl),fmtHHMM(ot),attMap.get(e.id)||'']);
   }
@@ -532,13 +532,13 @@ function dailyTimeAdjustments(emp,inTime,date,isHoliday){
   if(inMin==null)return {ut:0,sl:0};
   const normalStart=normalStartMinutesForEmployee(emp);
   const sl=inMin>normalStart?inMin-normalStart:0;
-  const ut=emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
+  const ut=emp.name==='Gautam'?0:emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
   return {ut,sl};
 }
 function dailyAdjustments(emp,record,date,isHoliday){
   const holidayOrSunday=isHoliday||new Date(date+'T00:00:00').getDay()===0;
   if(!record||holidayOrSunday)return {ut:0,sl:0};
-  const ut=utMinutesForRecord(record,new Set());
+  const ut=emp?.name==='Gautam'?0:utMinutesForRecord(record,new Set());
   const sl=slMinutesForRecord(record,emp,new Set());
   return {ut,sl};
 }
@@ -562,7 +562,7 @@ async function getOTReportBase(){
     for(const r of records||[]){
       if(r.employee_id!==e.id)continue;
       ot+=Number(r.ot_minutes)||0;
-      ut+=Number(r.ut_minutes)||0;
+      ut+=e.name==='Gautam'?0:Number(r.ut_minutes)||0;
       sl+=Number(r.sl_minutes)||0;
     }
     totals.set(e.id,{ot,ut,sl,net:ut+ot-sl});
@@ -594,7 +594,7 @@ async function getOTReportData(){
       const date=base.month+'-'+String(day).padStart(2,'0');
       const r=base.byKey.get(date+'|'+e.id);
       const ot=r?Number(r.ot_minutes)||0:0;
-      const ut=Number(r?.ut_minutes)||0;
+      const ut=e.name==='Gautam'?0:Number(r?.ut_minutes)||0;
       const sl=Number(r?.sl_minutes)||0;
       otTotal+=ot;utTotal+=ut;slTotal+=sl;
       days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,attendance:base.attendanceByKey.get(date+'|'+e.id)||''});
