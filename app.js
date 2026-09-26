@@ -106,6 +106,170 @@ const fmtDate=d=>{const s=String(d||'');const m=s.match(/^(\d{4})-(\d{2})-(\d{2}
 
 let employees=[],rules=[];
 const recordDrafts=new Map();
+let personEmployees=[];
+let personEmployeeIndex=0;
+
+function capturePersonRowDraft(row){
+  const date=row?.dataset?.date;
+  const employeeId=row?.dataset?.employeeId;
+  if(!date||!employeeId)return;
+  const emp=personEmployees.find(e=>e.id===employeeId);
+  if(!emp)return;
+  const inTime=normalizeTime(row.querySelector('.personIn')?.value||'');
+  const outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
+  const status=row.querySelector('.personAttendance')?.value||'';
+  const bg=window.__personSecondShift?.get(employeeId+'|'+date)||{};
+  const oldIn=(row.dataset.origIn||'');
+  const oldOut=(row.dataset.origOut||'');
+  const oldStatus=(row.dataset.origStatus||'');
+  const oldFirst=(row.dataset.origFirstOut||'');
+  const oldIn2=(row.dataset.origIn2||'');
+  const changed=inTime!==oldIn||outTime!==oldOut||status!==oldStatus||
+    (emp.split_shift&&((bg.out_time||'')!==oldFirst||(bg.in_time_2||'')!==oldIn2));
+  const key=date+'|'+employeeId;
+  if(changed){
+    recordDrafts.set(key,{date,employee_id:employeeId,in_time:inTime,out_time:outTime,status,split:!!emp.split_shift,
+      first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',dirty:true});
+  }else{
+    const d=recordDrafts.get(key);
+    if(d?.dirty)recordDrafts.delete(key);
+  }
+}
+
+function captureCurrentPersonDraft(){
+  document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(capturePersonRowDraft);
+}
+
+function personMonthRange(month){
+  const [y,m]=String(month||monthNow()).split('-').map(Number);
+  const start=y+'-'+String(m).padStart(2,'0')+'-01';
+  const last=new Date(Date.UTC(y,m,0)).getUTCDate();
+  return {start,end:y+'-'+String(m).padStart(2,'0')+'-'+String(last).padStart(2,'0'),days:last};
+}
+
+function personStatusOptions(emp,status){
+  const list=emp.category==='Staff'?['Present','First Half Leave','Second Half Leave','Full Day Leave']:['Present','Absent','Leave','Half Day','Holiday','Sunday'];
+  return '<option></option>'+list.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('');
+}
+
+function personSuggestedStatus(emp,rec,date,explicit,holiday){
+  if(explicit)return explicit;
+  const dow=new Date(date+'T00:00:00').getDay();
+  if(holiday)return 'Holiday';
+  if(dow===0)return 'Sunday';
+  if(!rec)return '';
+  const ni=rec.in_time?.slice(0,5)||'';
+  const no=(emp.split_shift&&rec.out_time_2?rec.out_time_2:rec.out_time)?.slice(0,5)||'';
+  const im=timeMinutes(ni),om=timeMinutes(no);
+  if(im===null||om===null)return '';
+  if(emp.category==='Staff'){
+    if(im<=570&&om<=795)return 'Second Half Leave';
+    if(im>=825&&om>=1035)return 'First Half Leave';
+    if(im<=570&&om>=1035)return 'Present';
+    return '';
+  }
+  return 'Present';
+}
+
+async function loadPersonRegister(){
+  const month=$('personMonth')?.value||monthNow();
+  const {start,end,days}=personMonthRange(month);
+  const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
+    db.from('employees').select('id,employee_code,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('employee_code').order('name'),
+    db.from('daily_records').select('id,work_date,employee_id,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes').gte('work_date',start).lte('work_date',end),
+    db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lte('work_date',end),
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lte('work_date',end)
+  ]);
+  const err=empError||recError||attError||holError;
+  if(err){$('personRegisterTable').innerHTML='<tr><td>'+esc(err.message)+'</td></tr>';return;}
+  personEmployees=emps||[];
+  if(!personEmployees.length){$('personRegisterTable').innerHTML='<tr><td>No active employees.</td></tr>';return;}
+  if(personEmployeeIndex>=personEmployees.length)personEmployeeIndex=0;
+  const selected=personEmployees[personEmployeeIndex];
+  const recordMap=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
+  const attMap=new Map((att||[]).map(r=>[r.work_date+'|'+r.employee_id,r.status]));
+  const holidaySet=new Set((hols||[]).map(h=>h.holiday_date));
+  const personKeys=new Set(personEmployees.map(e=>e.id));
+  document.querySelectorAll('#personTabs .personTab').forEach(x=>x.classList.toggle('active',x.dataset.id===selected.id));
+  let totalUT=0,totalSL=0,totalOT=0;
+  window.__personSecondShift=new Map();
+  let html='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
+  for(let day=1;day<=days;day++){
+    const date=start.slice(0,8)+String(day).padStart(2,'0');
+    const emp=selected;
+    const rec=recordMap.get(date+'|'+emp.id);
+    const draft=usableDraft(date,emp,rec,attMap,holidaySet.has(date),new Date(date+'T00:00:00').getDay());
+    const status=draft?draft.status:personSuggestedStatus(emp,rec,date,attMap.get(emp.id),holidaySet.has(date));
+    const inTime=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
+    const outTime=draft?draft.out_time:(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''));
+    const firstOut=draft?.first_out||(emp.split_shift?rec?.out_time?.slice(0,5)||'':'');
+    const in2=draft?.in_time_2||(emp.split_shift?rec?.in_time_2?.slice(0,5)||'':'');
+    if(emp.split_shift)window.__personSecondShift.set(emp.id+'|'+date,{out_time:firstOut,in_time_2:in2,out_time_2:outTime});
+    const live=rec||draft?calcLiveMinutes(emp,inTime,emp.split_shift?firstOut:outTime,emp.split_shift?in2:'',emp.split_shift?outTime:'',date,holidaySet.has(date)):null;
+    const dirty=!!draft;
+    const ut=dirty?dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date)).ut:(emp.name==='Gautam'?0:Number(rec?.ut_minutes)||0);
+    const sl=dirty?dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date)).sl:Number(rec?.sl_minutes)||0;
+    const ot=dirty?(live?.ot??0):Number(rec?.ot_minutes)||0;
+    totalUT+=ut;totalSL+=sl;totalOT+=ot;
+    const input=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
+    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(attMap.get(emp.id)||personSuggestedStatus(emp,rec,date,attMap.get(emp.id),holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'"><td>'+fmtDate(date)+'</td><td>'+input('personIn',inTime)+'</td><td class="personUT">'+fmtMin(ut)+'</td><td>'+input('personOut',outTime)+'</td><td class="personSL">'+fmtMin(sl)+'</td><td class="personOT">'+fmtMin(ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
+  }
+  $('personTabs').innerHTML=personEmployees.map((e,i)=>'<button type="button" class="secondary personTab '+(i===personEmployeeIndex?'active':'')+'" data-index="'+i+'" data-id="'+e.id+'">'+esc(e.name)+'</button>').join('');
+  $('personTitle').textContent=esc(selected.name)+' | '+month;
+  $('personSummary').textContent=esc(selected.name)+' | '+esc(selected.category)+' | Total UT '+fmtMin(totalUT)+' | Total SL '+fmtMin(totalSL)+' | Total OT '+fmtMin(totalOT);
+  $('personRegisterTable').innerHTML=html;
+  normalizeTimeFields();
+  document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance').forEach(el=>{
+    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row');capturePersonRowDraft(row);refreshPersonLiveTotals()});
+    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row');capturePersonRowDraft(row);refreshPersonLiveTotals()});
+  });
+}
+
+function refreshPersonLiveTotals(){
+  const emp=personEmployees[personEmployeeIndex];
+  if(!emp)return;
+  const month=$('personMonth')?.value||monthNow();
+  const {start,days}=personMonthRange(month);
+  let ut=0,sl=0,ot=0;
+  document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(row=>{
+    const date=row.dataset.date;
+    const inTime=normalizeTime(row.querySelector('.personIn')?.value||'');
+    const outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
+    const bg=window.__personSecondShift?.get(emp.id+'|'+date)||{};
+    const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,false);
+    const adj=dailyTimeAdjustments(emp,inTime,date,false);
+    const u=emp.name==='Gautam'?0:adj.ut,s=adj.sl,o=live?.ot??0;
+    row.querySelector('.personUT').textContent=fmtMin(u);
+    row.querySelector('.personSL').textContent=fmtMin(s);
+    row.querySelector('.personOT').textContent=fmtMin(o);
+    ut+=u;sl+=s;ot+=o;
+  });
+  $('personSummary').textContent=esc(emp.name)+' | '+esc(emp.category)+' | Total UT '+fmtMin(ut)+' | Total SL '+fmtMin(sl)+' | Total OT '+fmtMin(ot);
+}
+
+function personMoveEmployee(delta){
+  captureCurrentPersonDraft();
+  personEmployeeIndex=Math.max(0,Math.min(personEmployees.length-1,personEmployeeIndex+delta));
+  loadPersonRegister();
+}
+
+function exportPersonRegister(){
+  const emp=personEmployees[personEmployeeIndex];if(!emp)return;
+  const month=$('personMonth').value||monthNow();
+  const rows=[['Date','In Time','UT','Out Time','SL','OT','Attendance']];
+  document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(row=>{
+    rows.push([fmtDate(row.dataset.date),row.querySelector('.personIn')?.value||'',row.querySelector('.personUT')?.textContent||'',row.querySelector('.personOut')?.value||'',row.querySelector('.personSL')?.textContent||'',row.querySelector('.personOT')?.textContent||'',row.querySelector('.personAttendance')?.value||'']);
+  });
+  if(window.XLSX){
+    const ws=XLSX.utils.aoa_to_sheet(rows),wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,(emp.name||'Employee').slice(0,31));
+    XLSX.writeFile(wb,(emp.name||'Employee')+'_'+month+'.xlsx');
+  }else{
+    const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=(emp.name||'Employee')+'_'+month+'.csv';a.click();
+  }
+}
+
 const DB_NAME='fcs-attendance-local',STORE='pending',CACHE_KEY='fcs-attendance-cache';
 
 function openLocal(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:'client_id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
