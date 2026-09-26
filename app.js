@@ -18,62 +18,6 @@ function normalizeTime(v){
   if(/^\d{1,2}$/.test(v)){const h=Number(v);if(h<=23)return String(h).padStart(2,'0')+':00';}
   return '';
 }
-function markRecordUnsaved(e){
-  const row=e?.target?.closest?.('#recordsTable tr[data-employee-id]');
-  if(row){
-    row.dataset.dirty='1';
-    captureRecordRowDraft(row);
-  }
-  setSaveStatus('unsaved');
-  refreshLiveTotals();
-}
-
-function captureRecordRowDraft(row){
-  if(!row?.dataset?.dirty)return;
-  const date=$('recordDate')?.value||today(),employeeId=row?.dataset?.employeeId;if(!employeeId)return;
-  const emp=window.__recordEmployees?.find(x=>x.id===employeeId);if(!emp)return;
-  const bg=window.__recordSecondShift?.get(employeeId)||{};
-  const readAdj=(selector,display,override)=>{const raw=String(row.querySelector(selector)?.value??'').trim();return raw!==display?parseAdjustmentMinutes(raw):(override===''?null:Number(override))};
-  const draft={date,employee_id:employeeId,in_time:normalizeTime($('in-'+employeeId)?.value||''),out_time:normalizeTime($('out-'+employeeId)?.value||''),status:$('a-'+employeeId)?.value||'',split:!!emp.split_shift,
-    first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',
-    ut_override:readAdj('.dailyUT',row.dataset.origUtDisplay||'',row.dataset.origUtOverride||''),
-    sl_override:readAdj('.dailySL',row.dataset.origSlDisplay||'',row.dataset.origSlOverride||''),
-    ot_override:readAdj('.dailyOT',row.dataset.origOtDisplay||'',row.dataset.origOtOverride||''),dirty:true};
-  recordDrafts.set(date+'|'+employeeId,draft);
-}
-
-function captureCurrentRecordDrafts(){
-  document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(captureRecordRowDraft);
-}
-
-function draftFor(date,employeeId){
-  return recordDrafts.get(date+'|'+employeeId)||null;
-}
-function usableDraft(date,emp,rec,attMap,holiday,dow){
-  const d=draftFor(date,emp.id);
-  if(!d)return null;
-  const dbIn=(rec?.in_time||'').slice(0,5);
-  const dbOut=(emp.split_shift?(rec?.out_time_2||''):(rec?.out_time||'')).slice(0,5);
-  const dbFirstOut=emp.split_shift?(rec?.out_time||'').slice(0,5):'';
-  const dbIn2=emp.split_shift?(rec?.in_time_2||'').slice(0,5):'';
-  const dbStatus=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
-  const draftStatus=d.status||'';
-  const same=(d.in_time||'')===dbIn &&
-    (d.out_time||'')===dbOut &&
-    (!emp.split_shift || ((d.first_out||'')===dbFirstOut && (d.in_time_2||'')===dbIn2)) &&
-    draftStatus===dbStatus;
-  if(same){
-    recordDrafts.delete(date+'|'+emp.id);
-    return null;
-  }
-  return d;
-}
-function legacySplitFor(emp,rec){
-  if(!emp?.split_shift||!rec||rec.in_time_2||rec.out_time_2)return null;
-  return {first_out:'01:00',in_time_2:'06:00',out_time_2:(rec.out_time||'').slice(0,5)};
-}
-
-
 function normalizeTimeFields(){
   document.querySelectorAll('.timeEdit').forEach(el=>{
     if(el.dataset.timeReady)return;
@@ -151,7 +95,7 @@ function personStatusOptions(emp,status){
   return '<option></option>'+list.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('');
 }
 
-function personSuggestedStatus(emp,rec,date,explicit,holiday){
+function attendanceStatusForRecord(emp,rec,date,explicit,holiday){
   const dow=new Date(date+'T00:00:00').getDay();
   if(holiday)return 'Holiday';
   if(dow===0)return 'Sunday';
@@ -169,7 +113,6 @@ function personSuggestedStatus(emp,rec,date,explicit,holiday){
   }
   return 'Present';
 }
-
 async function loadPersonRegister(){
   const month=$('personMonth')?.value||monthNow();
   const {start,end,days}=personMonthRange(month);
@@ -201,7 +144,7 @@ async function loadPersonRegister(){
     const rec=recordMap.get(date+'|'+emp.id);
     const draft=draftFor(date,emp.id);
     const explicitStatus=attMap.get(date+'|'+emp.id);
-    const autoStatus=personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date));
+    const autoStatus=attendanceStatusForRecord(emp,rec,date,explicitStatus,holidaySet.has(date));
     const status=draft?(draft.status||autoStatus):autoStatus;
     const dow=new Date(date+'T00:00:00').getDay(),isHoliday=holidaySet.has(date);
     if(date<=countThrough){
@@ -225,7 +168,7 @@ async function loadPersonRegister(){
     const timeInput=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
     const adjustInput=(cls,val)=>'<input class="adjustEdit '+cls+'" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(val))+'">';
     const rowClass=isHoliday?'holidayRow':(dow===0?'sundayRow':(['First Half Leave','Second Half Leave','Full Day Leave','Leave','Half Day'].includes(status)?'leaveRow':'')); 
-    html+='<tr class="'+rowClass+'" data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'" data-orig-ut-display="'+esc(adjustmentInputValue(ut))+'" data-orig-sl-display="'+esc(adjustmentInputValue(sl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(ot))+'" data-orig-ut-override="'+(draft?(draft.ut_override==null?'':draft.ut_override):(rec?.ut_override_minutes==null?'':rec.ut_override_minutes))+'" data-orig-sl-override="'+(draft?(draft.sl_override==null?'':draft.sl_override):(rec?.sl_override_minutes==null?'':rec.sl_override_minutes))+'" data-orig-ot-override="'+(draft?(draft.ot_override==null?'':draft.ot_override):(rec?.ot_override_minutes==null?'':rec.ot_override_minutes))+'"><td>'+fmtDate(date)+'</td><td>'+timeInput('personIn',inTime)+'</td><td>'+adjustInput('personUT',ut)+'</td><td>'+timeInput('personOut',outTime)+'</td><td>'+adjustInput('personSL',sl)+'</td><td>'+adjustInput('personOT',ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
+    html+='<tr class="'+rowClass+'" data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||attendanceStatusForRecord(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'" data-orig-ut-display="'+esc(adjustmentInputValue(ut))+'" data-orig-sl-display="'+esc(adjustmentInputValue(sl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(ot))+'" data-orig-ut-override="'+(draft?(draft.ut_override==null?'':draft.ut_override):(rec?.ut_override_minutes==null?'':rec.ut_override_minutes))+'" data-orig-sl-override="'+(draft?(draft.sl_override==null?'':draft.sl_override):(rec?.sl_override_minutes==null?'':rec.sl_override_minutes))+'" data-orig-ot-override="'+(draft?(draft.ot_override==null?'':draft.ot_override):(rec?.ot_override_minutes==null?'':rec.ot_override_minutes))+'"><td>'+fmtDate(date)+'</td><td>'+timeInput('personIn',inTime)+'</td><td>'+adjustInput('personUT',ut)+'</td><td>'+timeInput('personOut',outTime)+'</td><td>'+adjustInput('personSL',sl)+'</td><td>'+adjustInput('personOT',ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
   }
   $('personTabs').innerHTML=personEmployees.map((e,i)=>'<button type="button" class="secondary personTab '+(i===personEmployeeIndex?'active':'')+'" data-index="'+i+'" data-id="'+e.id+'">'+esc(e.name)+'</button>').join('');
   $('personTitle').textContent=esc(selected.name)+' | '+month;
@@ -285,6 +228,7 @@ function refreshPersonLiveTotals(){
 
 function setupPersonRegister(){
   $('personMonth').value=monthNow();
+  $('attendanceMonth').value=monthNow();
   $('personPrev').onclick=()=>personMoveEmployee(-1);
   $('personNext').onclick=()=>personMoveEmployee(1);
   $('personMonth').onchange=()=>{captureCurrentPersonDraft();loadPersonRegister()};
@@ -297,16 +241,22 @@ function setupPersonRegister(){
   $('printPersonRegister').onclick=()=>{document.body.dataset.printTab='personRegister';window.print();setTimeout(()=>delete document.body.dataset.printTab,500)};
   $('exportPersonRegister').onclick=exportPersonRegister;
   $('personModeBtn').onclick=()=>{
-    $('personRegisterPane').classList.remove('hidden');$('dailyCheckPane').classList.add('hidden');
-    $('personModeBtn').classList.add('activeMode');$('dailyModeBtn').classList.remove('activeMode');
+    captureCurrentPersonDraft();
+    $('personRegisterPane').classList.remove('hidden');
+    $('monthlySummaryPane').classList.add('hidden');
+    $('personModeBtn').classList.add('activeMode');
+    $('monthlyModeBtn').classList.remove('activeMode');
     loadPersonRegister();
   };
-  $('dailyModeBtn').onclick=()=>{
-    captureCurrentPersonDraft();$('personRegisterPane').classList.add('hidden');$('dailyCheckPane').classList.remove('hidden');
-    $('dailyModeBtn').classList.add('activeMode');$('personModeBtn').classList.remove('activeMode');
+  $('monthlyModeBtn').onclick=()=>{
+    captureCurrentPersonDraft();
+    $('personRegisterPane').classList.add('hidden');
+    $('monthlySummaryPane').classList.remove('hidden');
+    $('monthlyModeBtn').classList.add('activeMode');
+    $('personModeBtn').classList.remove('activeMode');
+    generateAttendanceReport();
   };
 }
-
 function personMoveEmployee(delta){
   captureCurrentPersonDraft();
   personEmployeeIndex=Math.max(0,Math.min(personEmployees.length-1,personEmployeeIndex+delta));
@@ -449,96 +399,8 @@ async function checkSession(){
 }
 async function login(){const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('loginMessage').textContent=error?error.message:'Logged in';if(!error)await checkSession()}
 async function signup(){const {data,error}=await db.auth.signUp({email:$('email').value.trim(),password:$('password').value});$('loginMessage').textContent=error?error.message:(data.session?'Account created and logged in':'Account created. Check email if confirmation is required.')}
-async function loadAdmin(){await Promise.all([loadEmployeesAdmin(),loadRulesAdmin(),loadHolidays(),loadRecords(),loadPersonRegister(),loadReportOptions()])}
+async function loadAdmin(){await Promise.all([loadEmployeesAdmin(),loadRulesAdmin(),loadHolidays(),loadPersonRegister(),loadReportOptions()])}
 
-async function loadRecords(){
-  const date=$('recordDate').value||today();
-  const [{data:emps,error:empError},{data:rows,error:rowError},{data:att},{data:hols}]=await Promise.all([
-    db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,ut_minutes,sl_minutes,ut_override_minutes,sl_override_minutes,ot_override_minutes,employee_id').eq('work_date',date),
-    db.from('attendance').select('work_date,employee_id,status').eq('work_date',date),
-    db.from('holidays').select('holiday_date,name').eq('holiday_date',date)
-  ]);
-  if(empError||rowError){
-    $('recordsTable').innerHTML='<tr><td>'+esc((empError||rowError)?.message||'Unable to load records.')+'</td></tr>';
-    return;
-  }
-  const list=emps||[], recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
-  const attMap=new Map((att||[]).map(x=>[x.employee_id,x.status]));
-  const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
-  window.__recordEmployees=list;
-  window.__recordHoliday=holiday;
-  window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{out_time:r.out_time,in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
-  for(const emp of list){
-    const rec=recordMap.get(emp.id);
-    const d=usableDraft(date,emp,rec,attMap,holiday,dow);
-    const legacy=legacySplitFor(emp,rec);
-    if(d?.split){
-      window.__recordSecondShift.set(emp.id,{out_time:d.first_out||legacy?.first_out||'',in_time_2:d.in_time_2||legacy?.in_time_2||'',out_time_2:d.out_time||legacy?.out_time_2||''});
-    }else if(legacy){
-      window.__recordSecondShift.set(emp.id,legacy);
-    }
-  }
-  let totalWorked=0,totalOt=0;
-  const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'];
-  const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
-  const autoAttendance=[];
-  let html='<tr><th>Employee</th><th>Category</th><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
-  for(const emp of list){
-    const rec=recordMap.get(emp.id);
-    const draft=usableDraft(date,emp,rec,attMap,holiday,dow);
-    const autoStatus=holiday?'Holiday':(dow===0?'Sunday':(attMap.get(emp.id)||''));
-    let status=draft?(draft.status||autoStatus):autoStatus;
-    const visibleIn=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
-    const visibleOut=draft?draft.out_time:(emp.split_shift&&rec?.out_time_2?rec.out_time_2.slice(0,5):(rec?.out_time?.slice(0,5)||''));
-    if(rec||draft){
-      if(rec&&!draft){
-        totalWorked+=Number(rec.worked_minutes)||0;
-        totalOt+=Number(rec.ot_minutes)||0;
-      }
-      if(!draft&&!attMap.has(emp.id)&&!holiday&&dow!==0&&rec){
-        const ni=rec.in_time?.slice(0,5)||'', no=(emp.split_shift&&rec.out_time_2?rec.out_time_2:rec.out_time)?.slice(0,5)||'';
-        const im=timeMinutes(ni), om=timeMinutes(no);
-        let auto='';
-        if(emp.category==='Staff'&&im!==null&&om!==null){
-          if(im<=570&&om<=795)auto='Second Half Leave';
-          else if(im>=825&&om>=1035)auto='First Half Leave';
-          else if(im<=570&&om>=1035)auto='Present';
-        }else if(im!==null&&om!==null){
-          auto='Present';
-        }
-        if(auto){status=auto;autoAttendance.push({work_date:date,employee_id:emp.id,status:auto});}
-      }
-    }
-    const input=(id,value,placeholder='')=>'<input class="timeEdit" type="text" inputmode="numeric" maxlength="5" autocomplete="off" id="'+id+'" value="'+(value||'')+'" placeholder="'+placeholder+'">';
-    const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
-    const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
-    const in1=input('in-'+emp.id,visibleIn);
-    const out1=input('out-'+emp.id,visibleOut);
-    const calcAdj=dailyTimeAdjustments(emp,visibleIn,date,holiday);
-    const displayUt=draft?(draft.ut_override!=null?draft.ut_override:calcAdj.ut):effectiveAdjustment(rec,'ut_override_minutes',calcAdj.ut);
-    const displaySl=draft?(draft.sl_override!=null?draft.sl_override:calcAdj.sl):effectiveAdjustment(rec,'sl_override_minutes',calcAdj.sl);
-    const displayOt=draft?(draft.ot_override!=null?draft.ot_override:(rec?Number(rec.ot_minutes)||0:0)):effectiveAdjustment(rec,'ot_override_minutes',rec?Number(rec.ot_minutes)||0:0);
-    const utInput='<input class="adjustEdit dailyUT" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displayUt))+'">';
-    const slInput='<input class="adjustEdit dailySL" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displaySl))+'">';
-    const otInput='<input class="adjustEdit dailyOT" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displayOt))+'">';
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+displayUt+'" data-stored-sl="'+displaySl+'" data-stored-ot="'+displayOt+'" data-orig-ut-display="'+esc(adjustmentInputValue(displayUt))+'" data-orig-sl-display="'+esc(adjustmentInputValue(displaySl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(displayOt))+'" data-orig-ut-override="'+(rec?.ut_override_minutes==null?'':rec.ut_override_minutes)+'" data-orig-sl-override="'+(rec?.sl_override_minutes==null?'':rec.sl_override_minutes)+'" data-orig-ot-override="'+(rec?.ot_override_minutes==null?'':rec.ot_override_minutes)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td>'+utInput+'</td><td>'+out1+'</td><td>'+slInput+'</td><td>'+otInput+'</td><td>'+statusSelect+'</td></tr>';
-  }
-  const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
-  $('printTitle').textContent='Daily Register - '+fmtDate(date);
-  $('recordSummary').textContent=fmtDate(date)+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total UT 0h 00m | Total OT '+fmtMin(totalOt)+' | Total SL 0h 00m | Net 0h 00m';
-  $('recordsTable').innerHTML=html;
-  normalizeTimeFields();
-  document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
-    el.addEventListener('input',markRecordUnsaved);el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});el.addEventListener('change',markRecordUnsaved);
-  });
-  document.querySelectorAll('#recordsTable .adjustEdit').forEach(el=>{
-    el.addEventListener('input',markRecordUnsaved);el.addEventListener('change',markRecordUnsaved);
-    el.addEventListener('blur',()=>{const v=String(el.value||'').trim();if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v))});
-  });
-  document.querySelectorAll('#recordsTable .attendanceEdit').forEach(el=>el.addEventListener('change',markRecordUnsaved));
-  refreshLiveTotals();
-}
 function timeMinutes(v){
   const t=normalizeTime(v);if(!t)return null;
   const [h,m]=t.split(':').map(Number);return h*60+m;
@@ -582,55 +444,16 @@ function setSaveStatus(state){
   el.className='saveStatus '+state;
   el.textContent=state==='unsaved'?'Unsaved changes':state==='saving'?'Saving...':'All changes saved';
 }
-function refreshLiveTotals(){
-  const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;let worked=0,ot=0,ut=0,sl=0;
-  document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
-    const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
-    const ni=$('in-'+emp.id)?.value,no=$('out-'+emp.id)?.value,bg=window.__recordSecondShift?.get(emp.id)||{};
-    const ni2=emp.split_shift?(bg.in_time_2||'').slice(0,5):'',no2=emp.split_shift?(no||'').slice(0,5):'';
-    const live=emp.split_shift?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday):calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
-    const dirty=row.dataset.dirty==='1',d=recordDrafts.get(date+'|'+emp.id),auto=dailyTimeAdjustments(emp,ni,date,isHoliday);
-    const rowWorked=dirty?live.worked:Number(row.dataset.storedWorked);
-    const rowUt=d?(d.ut_override!=null?d.ut_override:auto.ut):Number(row.dataset.storedUt);
-    const rowSl=d?(d.sl_override!=null?d.sl_override:auto.sl):Number(row.dataset.storedSl);
-    const rowOt=d?(d.ot_override!=null?d.ot_override:(live.ot??0)):Number(row.dataset.storedOt);
-    row.querySelector('.dailyUT').value=fmtMin(rowUt);row.querySelector('.dailySL').value=fmtMin(rowSl);row.querySelector('.dailyOT').value=fmtMin(rowOt);
-    if(rowWorked!=null&&!Number.isNaN(rowWorked))worked+=rowWorked;if(rowOt!=null&&!Number.isNaN(rowOt))ot+=rowOt;ut+=rowUt;sl+=rowSl;
-  });
-  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl);
-}
 function downloadCSV(name,rows){
   const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=name;a.click();URL.revokeObjectURL(a.href);
 }
-async function exportRecords(){
-  const date=$('recordDate').value||today();
-  const [{data:emps},{data:rows},{data:att}]=await Promise.all([
-    db.from('employees').select('name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes,employee_id').eq('work_date',date),
-    db.from('attendance').select('employee_id,status').eq('work_date',date)
-  ]);
-  const recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
-  const attMap=new Map((att||[]).map(r=>[r.employee_id,r.status]));
-  const rowsOut=[['Date','Employee','Category','In Time','UT','Out Time','SL','OT','Attendance']];
-  for(const e of emps||[]){
-    const r=recordMap.get(e.id);
-    const inValue=r?.in_time?.slice(0,5)||'';
-    const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    const calc=r?dailyTimeAdjustments(e,r.in_time?.slice(0,5)||'',date,false):{ut:0,sl:0};
-    const adj=r?{ut:effectiveAdjustment(r,'ut_override_minutes',calc.ut),sl:effectiveAdjustment(r,'sl_override_minutes',calc.sl)}:{ut:0,sl:0};
-    const ot=r?effectiveAdjustment(r,'ot_override_minutes',Number(r.ot_minutes)||0):0;
-    rowsOut.push([fmtDate(date),e.name,e.category,inValue,fmtHHMM(adj.ut),outValue,fmtHHMM(adj.sl),fmtHHMM(ot),attMap.get(e.id)||'']);
-  }
-  downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
-}
-
 async function getMonthlyAttendanceData(){
   const month=$('attendanceMonth').value||monthNow();
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
     db.from('employees').select('id,name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,employee_id').gte('work_date',start).lt('work_date',end),
+    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2').gte('work_date',start).lt('work_date',end),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
     db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
   ]);
@@ -664,7 +487,7 @@ async function getMonthlyAttendanceData(){
       if(holidayMap.has(date))status='Holiday';
       else if(dow===0)status='Sunday';
       else if(explicit)status=explicit;
-      else if(hasRecord)status=personSuggestedStatus(e,rec,date,'',false)||'Present';
+      else if(hasRecord)status=attendanceStatusForRecord(e,rec,date,'',false)||'Present';
       else status='Absent';
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
@@ -893,7 +716,6 @@ async function exportReport(){
 }
 async function saveAllChanges(){
   captureCurrentPersonDraft();
-  captureCurrentRecordDrafts();
   const dirty=[...recordDrafts.entries()].filter(([,d])=>d.dirty);
   const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';setSaveStatus('saving');
   try{
@@ -954,7 +776,7 @@ async function saveAllChanges(){
         recordDrafts.delete(key);
       }
     }
-    await Promise.all([loadRecords(),loadPersonRegister(),loadReportOptions()]);
+    await Promise.all([loadPersonRegister(),loadReportOptions()]);
     btn.textContent='Saved';setSaveStatus('saved');setTimeout(()=>btn.textContent='Save Changes',900);
   }catch(e){
     alert(e.message||'Unable to save changes.');
@@ -1026,22 +848,9 @@ function setupTabs(){
 $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime','09:00');setupTimeInput('outTime','');setupTimeInput('inTime2','');setupTimeInput('outTime2','');
 $('employee').onchange=()=>{updateGateSplitFields();$('inTime').value='09:00';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value=''};
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
-$('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
-function moveRecordDate(days){
-  const input=$('recordDate');if(!input?.value)return;
-  const p=input.value.split('-').map(Number);
-  if(p.length!==3)return;
-  const d=new Date(Date.UTC(p[0],p[1]-1,p[2]+days));
-  input.value=d.toISOString().slice(0,10);
-  captureCurrentRecordDrafts();
-  loadRecords();
-}
-$('refreshRecords').onclick=()=>{captureCurrentRecordDrafts();loadRecords()};
-$('recordDate').onchange=()=>{captureCurrentRecordDrafts();loadRecords()};
-$('prevRecordDate').onclick=()=>moveRecordDate(-1);
-$('nextRecordDate').onclick=()=>moveRecordDate(1);$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
+$('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};loadRecords()};loadRecords()};$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
 $('readmeBtn').onclick=()=>{$('readmePanel').classList.toggle('hidden')};$('closeReadmeBtn').onclick=()=>{$('readmePanel').classList.add('hidden')};
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();setupPersonRegister();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();setupPersonRegister();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
