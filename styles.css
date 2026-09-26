@@ -263,3 +263,5 @@
 }
 #recordsTable,#reportsTab .otPersonTable{table-layout:fixed}
 #recordsTable th,#recordsTable td,#reportsTab .otPersonTable th,#reportsTab .otPersonTable td{width:auto}
+
+.dateArrow{min-width:42px;padding-left:10px;padding-right:10px;font-size:20px;line-height:1}
