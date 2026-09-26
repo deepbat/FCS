@@ -240,7 +240,7 @@ async function loadRecords(){
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
   const autoAttendance=[];
-  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>OT</th><th>Attendance</th></tr>';
+  let html='<tr><th>Employee</th><th>Category</th><th>IN</th><th>OUT</th><th>Worked</th><th>UT</th><th>OT</th><th>SL</th><th>Net</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     const draft=draftFor(date,emp.id);
@@ -271,11 +271,11 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td></td><td></td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
-  $('recordSummary').textContent=fmtDate(date)+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total OT '+fmtMin(totalOt);
+  $('recordSummary').textContent=fmtDate(date)+holidayLabel+' | Total Worked '+fmtMin(totalWorked)+' | Total UT 0h 00m | Total OT '+fmtMin(totalOt)+' | Total SL 0h 00m | Net 0h 00m';
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
@@ -330,7 +330,7 @@ function setSaveStatus(state){
 }
 function refreshLiveTotals(){
   const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;
-  let worked=0,ot=0;
+  let worked=0,ot=0,ut=0,sl=0;
   document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
     const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
     const ni=$('in-'+emp.id)?.value;
@@ -341,13 +341,18 @@ function refreshLiveTotals(){
     const live=emp.split_shift
       ?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday)
       :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
-    const workedCell=row.children[4],otCell=row.children[5];
-    workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
-    otCell.textContent=live.ot==null?'':fmtMin(live.ot);
+    const adj=dailyTimeAdjustments(emp,ni,date,isHoliday);
+    const net=adj.ut+live.ot-adj.sl;
+    row.children[4].textContent=live.worked==null?'':fmtMin(live.worked);
+    row.children[5].textContent=live.worked==null?'':fmtMin(adj.ut);
+    row.children[6].textContent=live.ot==null?'':fmtMin(live.ot);
+    row.children[7].textContent=live.worked==null?'':fmtMin(adj.sl);
+    row.children[8].textContent=live.worked==null?'':signedMinutesText(net);
     if(live.worked!=null)worked+=live.worked;
     if(live.ot!=null)ot+=live.ot;
+    ut+=adj.ut;sl+=adj.sl;
   });
-  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total OT '+fmtMin(ot);
+  $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl)+' | Net '+signedMinutesText(ut+ot-sl);
 }
 function downloadCSV(name,rows){
   const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
@@ -362,12 +367,14 @@ async function exportRecords(){
   ]);
   const recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
   const attMap=new Map((att||[]).map(r=>[r.employee_id,r.status]));
-  const rowsOut=[['Date','Employee','Category','IN','OUT','Worked','OT','Attendance']];
+  const rowsOut=[['Date','Employee','Category','IN','OUT','Worked','UT','OT','SL','Net','Attendance']];
   for(const e of emps||[]){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    rowsOut.push([fmtDate(date),e.name,e.category,inValue,outValue,r?fmtMin(r.worked_minutes):'',r?fmtMin(r.ot_minutes):'',attMap.get(e.id)||'']);
+    const adj=r?dailyTimeAdjustments(e,inValue,date,false):{ut:0,sl:0};
+    const ot=r?Number(r.ot_minutes)||0:0;
+    rowsOut.push([fmtDate(date),e.name,e.category,inValue,outValue,r?fmtMin(r.worked_minutes):'',fmtHHMM(adj.ut),fmtHHMM(ot),fmtHHMM(adj.sl),signedMinutesText(adj.ut+ot-adj.sl),attMap.get(e.id)||'']);
   }
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
 }
@@ -496,6 +503,15 @@ function signedMinutesText(mins){
   const sign=n<0?'-':'';
   const a=Math.abs(n);
   return sign+Math.floor(a/60)+'h '+String(a%60).padStart(2,'0')+'m';
+}
+function dailyTimeAdjustments(emp,inTime,date,isHoliday){
+  if(!emp||!inTime||isHoliday||new Date(date+'T00:00:00').getDay()===0)return {ut:0,sl:0};
+  const inMin=minutesFromHHMM(inTime);
+  if(inMin==null)return {ut:0,sl:0};
+  const normalStart=normalStartMinutesForEmployee(emp);
+  const sl=inMin>normalStart?inMin-normalStart:0;
+  const ut=(emp.category==='Driver'||emp.category==='Gateman')&&inMin<(8*60+40)?9*60-inMin:0;
+  return {ut,sl};
 }
 function dailyAdjustments(emp,record,date,isHoliday){
   const holidayOrSunday=isHoliday||new Date(date+'T00:00:00').getDay()===0;
