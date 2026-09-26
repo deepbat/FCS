@@ -486,14 +486,14 @@ async function getMonthlyAttendanceData(){
     const c={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0};
     for(const date of days){
       const rec=recordMap.get(date+'|'+e.id);
-      const hasRecord=!!rec;
       const explicit=attMap.get(date+'|'+e.id);
       const dow=new Date(date+'T00:00:00').getDay();
+      const hasValidTiming=!!(rec?.in_time&&((rec?.out_time)||((e?.split_shift)&&rec?.in_time_2&&rec?.out_time_2)));
       let status;
       if(holidayMap.has(date))status='Holiday';
       else if(dow===0)status='Sunday';
       else if(explicit)status=explicit;
-      else if(hasRecord){const inferred=attendanceStatusForRecord(e,rec,date,'',false);status=inferred||'Present';}
+      else if(hasValidTiming)status='Present';
       else status='Absent';
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
