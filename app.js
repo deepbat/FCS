@@ -312,7 +312,7 @@ function timeMinutes(v){
 function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
   const a=timeMinutes(ni),b=timeMinutes(no);
   if(a===null||b===null)return {worked:null,ot:null};
-  if(!emp.split_shift&&b<a)return {worked:null,ot:null};
+  if(!emp.split_shift&&b<a&&!(emp.category==='Driver'||emp.category==='Gateman'))return {worked:null,ot:null};
   let total;
   if(emp.split_shift){
     const firstOut=timeMinutes(no2?'01:00':(no2||'01:00'));
@@ -336,7 +336,8 @@ function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
       const extra=rounded-er.normal_work_minutes;
       ot=extra>er.ot_threshold_minutes?extra:0;
     }else{
-      const extra=Math.max(0,b-(17*60+45));
+      const outForOT=(b<a?b+1440:b);
+      const extra=Math.max(0,outForOT-(17*60+45));
       ot=extra>er.ot_threshold_minutes?extra:0;
     }
   }
@@ -681,7 +682,7 @@ async function saveAllChanges(){
         const no2=split?no:'';
         const firstOut=split?normalizeTime(d.first_out||legacy?.first_out||old?.out_time||'01:00'):'';
         if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+' on '+fmtDate(date)+'.');
-        if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+' on '+fmtDate(date)+'.');
+        if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni)&&!['Driver','Gateman'].includes(emp.category))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+' on '+fmtDate(date)+'.');
         if(split&&(!firstOut||(!ni2&&!no2)||(!ni2&&no2)))throw new Error('Unable to determine split-shift times for '+emp.name+' on '+fmtDate(date)+'.');
         const er=effectiveRule(emp);
         if(ni&&no){
