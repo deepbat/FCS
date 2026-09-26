@@ -120,7 +120,7 @@ function attendanceStatusForRecord(emp,rec,date,explicit,holiday){
     if(im<=570&&om<=795)return 'Second Half Leave';
     if(im>=825&&om>=1035)return 'First Half Leave';
     if(im<=570&&om>=1035)return 'Present';
-    return '';
+    return 'Present';
   }
   return 'Present';
 }
