@@ -2,7 +2,7 @@ const SUPABASE_URL='https://raesuqidwkcpylvqiftf.supabase.co';
 const SUPABASE_KEY='sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
-let employees=[];
+let employees=[];\nconst QUEUE_KEY='fcs-attendance-pending-v2';\nconst getQueue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')}catch{return[]}};\nconst setQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));\nfunction updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?'Pending sync':'Ready'}\nasync function syncQueue(){const q=getQueue();if(!q.length)return;const left=[];for(const p of q){try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});if(r.error)throw r.error;const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)throw a.error}catch(e){left.push(p)}}setQueue(left);updatePending()}\nwindow.addEventListener('online',syncQueue);
 
 function today(){
   const d=new Date(); return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -75,4 +75,4 @@ $('inTime').addEventListener('blur',e=>{if(e.target.value)e.target.value=normali
 $('outTime').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
 $('inTime2').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
 $('outTime2').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
-(async()=>{await loadEmployees();$('syncStatus').textContent='Ready';})();
+(async()=>{await loadEmployees();updatePending();await syncQueue();})();
