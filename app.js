@@ -282,7 +282,7 @@ async function exportPersonRegister(){
       db.from('employees').select('id,employee_code,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('employee_code').order('name'),
       db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ut_override_minutes,sl_override_minutes,ot_override_minutes').gte('work_date',start).lt('work_date',end),
       db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end),
-      db.from('holidays').select('holiday_date,name').gte('work_date',start).lt('work_date',end)
+      db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lt('holiday_date',end)
     ]);
     const err=empError||recError||attError||holError;if(err)throw new Error(err.message);
     if(!window.XLSX)throw new Error('Excel export library is not available.');
