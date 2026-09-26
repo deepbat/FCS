@@ -252,14 +252,16 @@ async function loadRecords(){
         totalWorked+=Number(rec.worked_minutes)||0;
         totalOt+=Number(rec.ot_minutes)||0;
       }
-      if(!draft&&!attMap.has(emp.id)&&!holiday&&dow!==0){
-        const ni=rec?.in_time?.slice(0,5)||'', no=rec?.out_time?.slice(0,5)||'';
+      if(!draft&&!attMap.has(emp.id)&&!holiday&&dow!==0&&rec){
+        const ni=rec.in_time?.slice(0,5)||'', no=(emp.split_shift&&rec.out_time_2?rec.out_time_2:rec.out_time)?.slice(0,5)||'';
         const im=timeMinutes(ni), om=timeMinutes(no);
         let auto='';
         if(emp.category==='Staff'&&im!==null&&om!==null){
           if(im<=570&&om<=795)auto='Second Half Leave';
           else if(im>=825&&om>=1035)auto='First Half Leave';
           else if(im<=570&&om>=1035)auto='Present';
+        }else if(im!==null&&om!==null){
+          auto='Present';
         }
         if(auto){status=auto;autoAttendance.push({work_date:date,employee_id:emp.id,status:auto});}
       }
