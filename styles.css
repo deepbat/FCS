@@ -295,6 +295,7 @@
   body[data-print-tab="personRegister"] .personOut{border:0;padding:0;background:transparent}
 }
 
-.adjustEdit{width:92px;box-sizing:border-box;font:inherit;padding:6px 7px;border:1px solid #c7cdd4;border-radius:4px;background:#fff;text-align:center}
+.adjustEdit{width:92px;box-sizing:border-box;font:inherit;padding:6px 7px;border:1px solid transparent;border-radius:4px;background:transparent;text-align:center;outline:none}
+.adjustEdit:focus{border-color:#c7cdd4;background:#fff;outline:none;box-shadow:none}
 #personRegisterTable .adjustEdit{width:82px}
 #recordsTable .adjustEdit{width:82px}
