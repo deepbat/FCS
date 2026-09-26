@@ -524,6 +524,7 @@ async function getMonthlyAttendanceData(){
       let status;
       if(holidayMap.has(date))status='Holiday';
       else if(dow===0)status='Sunday';
+      else if(explicit && explicit!=='Absent')status=explicit;
       else if(hasValidTiming)status='Present';
       else if(explicit)status=explicit;
       else status='Absent';
