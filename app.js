@@ -649,17 +649,23 @@ async function getMonthlyAttendanceData(){
     while(d<=last){days.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}
   }
 
-  const recordSet=new Set((records||[]).map(r=>r.work_date+'|'+r.employee_id));
+  const recordMap=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
   const attMap=new Map((att||[]).map(r=>[r.work_date+'|'+r.employee_id,r.status]));
   const holidayMap=new Map((hols||[]).map(h=>[h.holiday_date,h.name]));
 
   const rows=(emps||[]).map((e,i)=>{
     const c={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0};
     for(const date of days){
-      const hasRecord=recordSet.has(date+'|'+e.id);
+      const rec=recordMap.get(date+'|'+e.id);
+      const hasRecord=!!rec;
       const explicit=attMap.get(date+'|'+e.id);
       const dow=new Date(date+'T00:00:00').getDay();
-      const status=holidayMap.has(date)?'Holiday':(dow===0?'Sunday':(explicit||(hasRecord?'Present':'Absent')));
+      let status;
+      if(holidayMap.has(date))status='Holiday';
+      else if(dow===0)status='Sunday';
+      else if(explicit)status=explicit;
+      else if(hasRecord)status=personSuggestedStatus(e,rec,date,'',false)||'Present';
+      else status='Absent';
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
       else if(status==='Full Day Leave'||status==='Leave')c.leave++;
