@@ -326,7 +326,7 @@ function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
     total=b-a+(b<a?1440:0);
   }
   const er=effectiveRule(emp);
-  const rounded=er.round_minutes>0?Math.round(total/er.round_minutes)*er.round_minutes:total;
+  const rounded=er.round_minutes>0?Math.floor(total/er.round_minutes)*er.round_minutes:(special?Math.floor(total/30)*30:total);
   const special=(emp.category==='Driver'||emp.category==='Gateman')&&(new Date(date+'T00:00:00').getDay()===0||isHoliday);
   const worked=Math.max(0,rounded-(special?0:er.break_minutes));
   let ot=0;
@@ -531,7 +531,7 @@ function dailyTimeAdjustments(emp,inTime,date,isHoliday){
   if(inMin==null)return {ut:0,sl:0};
   const normalStart=normalStartMinutesForEmployee(emp);
   const sl=inMin>normalStart?inMin-normalStart:0;
-  const ut=(emp.category==='Driver'||emp.category==='Gateman')&&inMin<(8*60+40)?9*60-inMin:0;
+  const ut=emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
   return {ut,sl};
 }
 function dailyAdjustments(emp,record,date,isHoliday){
