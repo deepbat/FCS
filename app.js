@@ -147,7 +147,8 @@ async function loadPersonRegister(){
   let totalUT=0,totalSL=0,totalOT=0,totalWorkingDays=0,totalPresent=0,totalHalfDay=0,totalLeave=0,totalAbsent=0,totalSunday=0,totalHoliday=0;
   window.__personSecondShift=new Map();
   window.__personHolidaySet=holidaySet;
-  const countThrough=month===monthNow()?today():end.slice(0,10);
+  const enteredDates=[...(records||[]).map(r=>r.work_date),...(att||[]).map(r=>r.work_date)].filter(Boolean).sort();
+  const countThrough=month===monthNow()?(enteredDates.length?enteredDates[enteredDates.length-1]:null):end.slice(0,10);
   let html='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(let day=1;day<=days;day++){
     const date=start.slice(0,8)+String(day).padStart(2,'0');
@@ -290,10 +291,11 @@ async function exportPersonRegister(){
     const attMap=new Map((att||[]).map(r=>[r.work_date+'|'+r.employee_id,r.status]));
     const holidaySet=new Set((hols||[]).map(h=>h.holiday_date));
     const wb=XLSX.utils.book_new(),used=new Set();
-    const days=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
+    const enteredDates=[...(records||[]).map(r=>r.work_date),...(att||[]).map(r=>r.work_date)].filter(Boolean).sort();
+    const lastDay=month===monthNow()?(enteredDates.length?Number(enteredDates[enteredDates.length-1].slice(8,10)):0):new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
     for(const emp of emps||[]){
       const rows=[['Date','In Time','UT','Out Time','SL','OT','Attendance']];
-      for(let day=1;day<=days;day++){
+      for(let day=1;day<=lastDay;day++){
         const date=month+'-'+String(day).padStart(2,'0');
         const rec=recordMap.get(date+'|'+emp.id);
         const explicit=attMap.get(date+'|'+emp.id);
@@ -521,13 +523,9 @@ async function getMonthlyAttendanceData(){
       const explicit=attMap.get(date+'|'+e.id);
       const dow=new Date(date+'T00:00:00').getDay();
       const hasValidTiming=!!(rec?.in_time&&((rec?.out_time)||((e?.split_shift)&&rec?.in_time_2&&rec?.out_time_2)));
-      let status;
-      if(holidayMap.has(date))status='Holiday';
-      else if(dow===0)status='Sunday';
-      else if(explicit && explicit!=='Absent')status=explicit;
-      else if(hasValidTiming)status='Present';
-      else if(explicit)status=explicit;
-      else status='Absent';
+      let status=attendanceStatusForRecord(e,rec,date,explicit,holidayMap.has(date));
+      if(!status&&hasValidTiming)status='Present';
+      else if(!status)status='Absent';
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
       else if(status==='Full Day Leave'||status==='Leave')c.leave++;
