@@ -58,7 +58,7 @@ function getDraft(date,id){
   const c=calc(e,r,date);const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
   drafts.set(key,d);return d;
 }
-function markUnsaved(){const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
+function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\\d+)h\\s*(\\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\\d+$/.test(v))return +v;return null}\nfunction markUnsaved(){const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
 async function loadData(){
   const [er,rr,hr,dr,ar]=await Promise.all([
     db.from('employees').select('*').order('employee_code'),
