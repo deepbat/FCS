@@ -178,7 +178,7 @@ async function loadPersonRegister(){
     db.from('employees').select('id,employee_code,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('employee_code').order('name'),
     db.from('daily_records').select('id,work_date,employee_id,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes').gte('work_date',start).lte('work_date',end),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lte('work_date',end),
-    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lte('work_date',end)
+    db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lte('holiday_date',end)
   ]);
   const err=empError||recError||attError||holError;
   if(err){$('personRegisterTable').innerHTML='<tr><td>'+esc(err.message)+'</td></tr>';return;}
@@ -198,8 +198,9 @@ async function loadPersonRegister(){
     const date=start.slice(0,8)+String(day).padStart(2,'0');
     const emp=selected;
     const rec=recordMap.get(date+'|'+emp.id);
-    const draft=usableDraft(date,emp,rec,attMap,holidaySet.has(date),new Date(date+'T00:00:00').getDay());
-    const status=draft?draft.status:personSuggestedStatus(emp,rec,date,attMap.get(emp.id),holidaySet.has(date));
+    const draft=draftFor(date,emp.id);
+    const explicitStatus=attMap.get(date+'|'+emp.id);
+    const status=draft?draft.status:personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date));
     const inTime=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const outTime=draft?draft.out_time:(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''));
     const firstOut=draft?.first_out||(emp.split_shift?rec?.out_time?.slice(0,5)||'':'');
@@ -212,7 +213,7 @@ async function loadPersonRegister(){
     const ot=dirty?(live?.ot??0):Number(rec?.ot_minutes)||0;
     totalUT+=ut;totalSL+=sl;totalOT+=ot;
     const input=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
-    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(attMap.get(emp.id)||personSuggestedStatus(emp,rec,date,attMap.get(emp.id),holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'"><td>'+fmtDate(date)+'</td><td>'+input('personIn',inTime)+'</td><td class="personUT">'+fmtMin(ut)+'</td><td>'+input('personOut',outTime)+'</td><td class="personSL">'+fmtMin(sl)+'</td><td class="personOT">'+fmtMin(ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
+    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'"><td>'+fmtDate(date)+'</td><td>'+input('personIn',inTime)+'</td><td class="personUT">'+fmtMin(ut)+'</td><td>'+input('personOut',outTime)+'</td><td class="personSL">'+fmtMin(sl)+'</td><td class="personOT">'+fmtMin(ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
   }
   $('personTabs').innerHTML=personEmployees.map((e,i)=>'<button type="button" class="secondary personTab '+(i===personEmployeeIndex?'active':'')+'" data-index="'+i+'" data-id="'+e.id+'">'+esc(e.name)+'</button>').join('');
   $('personTitle').textContent=esc(selected.name)+' | '+month;
@@ -220,8 +221,8 @@ async function loadPersonRegister(){
   $('personRegisterTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance').forEach(el=>{
-    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row');capturePersonRowDraft(row);refreshPersonLiveTotals()});
-    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row');capturePersonRowDraft(row);refreshPersonLiveTotals()});
+    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);refreshPersonLiveTotals()});
+    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);refreshPersonLiveTotals()});
   });
 }
 
@@ -245,6 +246,31 @@ function refreshPersonLiveTotals(){
     ut+=u;sl+=s;ot+=o;
   });
   $('personSummary').textContent=esc(emp.name)+' | '+esc(emp.category)+' | Total UT '+fmtMin(ut)+' | Total SL '+fmtMin(sl)+' | Total OT '+fmtMin(ot);
+}
+
+function setupPersonRegister(){
+  $('personMonth').value=monthNow();
+  $('personPrev').onclick=()=>personMoveEmployee(-1);
+  $('personNext').onclick=()=>personMoveEmployee(1);
+  $('personMonth').onchange=()=>{captureCurrentPersonDraft();loadPersonRegister()};
+  $('personTabs').onclick=e=>{
+    const b=e.target.closest('.personTab');if(!b)return;
+    captureCurrentPersonDraft();
+    personEmployeeIndex=Number(b.dataset.index)||0;
+    loadPersonRegister();
+  };
+  $('printPersonRegister').onclick=()=>{document.body.dataset.printTab='personRegister';window.print();setTimeout(()=>delete document.body.dataset.printTab,500)};
+  $('exportPersonRegister').onclick=exportPersonRegister;
+  $('personModeBtn').onclick=()=>{
+    $('personRegisterPane').classList.remove('hidden');$('dailyCheckPane').classList.add('hidden');
+    $('personModeBtn').classList.add('activeMode');$('dailyModeBtn').classList.remove('activeMode');
+    loadPersonRegister();
+  };
+  $('dailyModeBtn').onclick=()=>{
+    captureCurrentPersonDraft();$('personRegisterPane').classList.add('hidden');$('dailyCheckPane').classList.remove('hidden');
+    $('dailyModeBtn').classList.add('activeMode');$('personModeBtn').classList.remove('activeMode');
+  };
+  loadPersonRegister();
 }
 
 function personMoveEmployee(delta){
@@ -826,6 +852,7 @@ async function exportReport(){
   }catch(e){alert(e.message||'Unable to export report.')}
 }
 async function saveAllChanges(){
+  captureCurrentPersonDraft();
   captureCurrentRecordDrafts();
   const dirty=[...recordDrafts.entries()].filter(([,d])=>d.dirty);
   const btn=$('saveAllBtn');btn.disabled=true;btn.textContent='Saving...';setSaveStatus('saving');
@@ -884,7 +911,7 @@ async function saveAllChanges(){
         recordDrafts.delete(key);
       }
     }
-    await Promise.all([loadRecords(),loadReportOptions()]);
+    await Promise.all([loadRecords(),loadPersonRegister(),loadReportOptions()]);
     btn.textContent='Saved';setSaveStatus('saved');setTimeout(()=>btn.textContent='Save Changes',900);
   }catch(e){
     alert(e.message||'Unable to save changes.');
