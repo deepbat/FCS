@@ -112,11 +112,17 @@ function renderRegister(){
 }
 function editCell(tr,e){
  const date=tr.dataset.date,d=getDraft(date,e.id);
- tr.querySelectorAll('[data-f]').forEach(el=>{let f=el.dataset.f,v=el.value;if(['in_time','out_time','in_time_2','out_time_2'].includes(f))v=normalize(v);d[f]=v});
- if(d.ut_override==null)d.ut=calc({...e}, {...d},date).ut;
- if(d.sl_override==null)d.sl=calc({...e}, {...d},date).sl;
- if(d.ot_override==null)d.ot=calc({...e}, {...d},date).ot;
- markUnsaved();renderRowValues(tr,d);
+ tr.querySelectorAll('[data-f]').forEach(el=>{
+   const f=el.dataset.f,v=el.value;
+   if(['in_time','out_time','in_time_2','out_time_2'].includes(f))d[f]=normalize(v);
+   else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
+   else d[f]=v;
+ });
+ const c=calc({...e},{...d},date);
+ if(d.ut_override==null)d.ut=c.ut;
+ if(d.sl_override==null)d.sl=c.sl;
+ if(d.ot_override==null)d.ot=c.ot;
+ markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());
 }
 function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
 function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='OT: '+fmtMin(ot)+'   UT: '+fmtMin(ut)+'   SL: '+fmtMin(sl)}
