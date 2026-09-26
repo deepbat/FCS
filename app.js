@@ -787,7 +787,19 @@ $('workDate').value=today();$('recordDate').value=today();setupTimeInput('inTime
 $('employee').onchange=()=>{updateGateSplitFields();$('inTime').value='09:00';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value=''};
 $('saveBtn').onclick=saveGate;$('adminBtn').onclick=()=>show('loginView');$('backBtn').onclick=()=>show('gateView');$('loginBtn').onclick=login;$('signupBtn').onclick=signup;
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();show('gateView')};
-$('refreshRecords').onclick=()=>{captureCurrentRecordDrafts();loadRecords()};$('recordDate').onchange=()=>{captureCurrentRecordDrafts();loadRecords()};$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
+function moveRecordDate(days){
+  const input=$('recordDate');if(!input?.value)return;
+  const p=input.value.split('-').map(Number);
+  if(p.length!==3)return;
+  const d=new Date(Date.UTC(p[0],p[1]-1,p[2]+days));
+  input.value=d.toISOString().slice(0,10);
+  captureCurrentRecordDrafts();
+  loadRecords();
+}
+$('refreshRecords').onclick=()=>{captureCurrentRecordDrafts();loadRecords()};
+$('recordDate').onchange=()=>{captureCurrentRecordDrafts();loadRecords()};
+$('prevRecordDate').onclick=()=>moveRecordDate(-1);
+$('nextRecordDate').onclick=()=>moveRecordDate(1);$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();
 
 (async()=>{
