@@ -147,15 +147,15 @@ function personMonthRange(month){
 }
 
 function personStatusOptions(emp,status){
-  const list=emp.category==='Staff'?['Present','First Half Leave','Second Half Leave','Full Day Leave']:['Present','Absent','Leave','Half Day','Holiday','Sunday'];
+  const list=emp.category==='Staff'?['Present','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday']:['Present','Absent','Leave','Half Day','Holiday','Sunday'];
   return '<option></option>'+list.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('');
 }
 
 function personSuggestedStatus(emp,rec,date,explicit,holiday){
-  if(explicit)return explicit;
   const dow=new Date(date+'T00:00:00').getDay();
   if(holiday)return 'Holiday';
   if(dow===0)return 'Sunday';
+  if(explicit)return explicit;
   if(!rec)return '';
   const ni=rec.in_time?.slice(0,5)||'';
   const no=(emp.split_shift&&rec.out_time_2?rec.out_time_2:rec.out_time)?.slice(0,5)||'';
@@ -453,14 +453,14 @@ async function loadRecords(){
     }
   }
   let totalWorked=0,totalOt=0;
-  const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
+  const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
   const autoAttendance=[];
   let html='<tr><th>Employee</th><th>Category</th><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     const draft=usableDraft(date,emp,rec,attMap,holiday,dow);
-    let status=draft?draft.status:(attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':'')));
+    let status=draft?draft.status:((holiday?'Holiday':(dow===0?'Sunday':attMap.get(emp.id)||'')));
     const visibleIn=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const visibleOut=draft?draft.out_time:(emp.split_shift&&rec?.out_time_2?rec.out_time_2.slice(0,5):(rec?.out_time?.slice(0,5)||''));
     if(rec||draft){
@@ -631,7 +631,7 @@ async function getMonthlyAttendanceData(){
       const hasRecord=recordSet.has(date+'|'+e.id);
       const explicit=attMap.get(date+'|'+e.id);
       const dow=new Date(date+'T00:00:00').getDay();
-      const status=explicit||(hasRecord?'Present':holidayMap.has(date)?'Holiday':dow===0?'Sunday':'Absent');
+      const status=holidayMap.has(date)?'Holiday':(dow===0?'Sunday':(explicit||(hasRecord?'Present':'Absent')));
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
       else if(status==='Full Day Leave'||status==='Leave')c.leave++;
