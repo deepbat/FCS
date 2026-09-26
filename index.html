@@ -28,4 +28,171 @@
 <div id="reportTitle" class="printTitle"></div>
 <div id="reportSummary" class="summary"></div>
 <div class="tablewrap"><table id="reportTable"></table></div>
-</div><div id="employeesTab" class="tabpane hidden"><div class="card"><h3>Add Employee</h3><div class="formgrid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCategory"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmployee" class="primary">Add</button></div></div><div class="tablewrap"><table id="employeesTable"></table></div></div><div id="holidaysTab" class="tabpane hidden"><div class="card"><h3>Add Holiday</h3><div class="formgrid"><input id="holidayDate" type="date"><input id="holidayName" placeholder="Holiday name"><button id="addHoliday" class="primary">Add</button></div></div><div class="tablewrap"><table id="holidaysTable"></table></div></div><div id="settingsTab" class="tabpane hidden"><div class="card"><h3>Category Rules</h3><p class="muted">Gateman daily target is configurable. Staff and Gardener remain non-OT.</p><div id="rulesForm"></div><p id="rulesMessage" class="message"></p></div></div><div class="adminReadme"><button id="readmeBtn" class="secondary">Read Me / Attendance Rules</button></div><div id="readmePanel" class="readmePanel hidden"><div class="card"><h3>FCS Attendance - Quick Rules</h3><ul><li>Gateman enters date and timings from register. Previous entries are not displayed.</li><li>Staff: 9am to 5:45pm with 45-minute break. Staff are not eligible for OT.</li><li>Driver: 9am to 5:45pm with 45-minute break. OT applies after the allowed threshold.</li><li>Gardener: 8:30am to 5:10pm with 40-minute break. No OT.</li><li>Gateman: timings and break are configurable in Settings.</li><li>Gautam: official start is 7:30am. Before 7:30am is voluntary early arrival with no UT. From 7:30am up to 9am, UT is calculated against 9am.</li><li>Varinder Pal: split duty is handled in background as 6pm to 1am and 6am onward. Sleep period is not counted as duty.</li><li>Sundays and holidays are automatically identified for everyone. Driver/Gateman working on Sunday or holiday receive full duty time as OT without break deduction.</li><li>UT, SL and OT can be manually adjusted in Admin for exceptional situations. Manual adjustments are saved as overrides.</li><li>Person Register changes are kept as drafts until Save Changes. Changes across different dates and people can be saved together.</li></ul><button id="closeReadmeBtn" class="secondary">Close</button></div></div></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20260926-10"></script></body></html>
+</div><div id="employeesTab" class="tabpane hidden"><div class="card"><h3>Add Employee</h3><div class="formgrid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCategory"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmployee" class="primary">Add</button></div></div><div class="tablewrap"><table id="employeesTable"></table></div></div><div id="holidaysTab" class="tabpane hidden"><div class="card"><h3>Add Holiday</h3><div class="formgrid"><input id="holidayDate" type="date"><input id="holidayName" placeholder="Holiday name"><button id="addHoliday" class="primary">Add</button></div></div><div class="tablewrap"><table id="holidaysTable"></table></div></div><div id="settingsTab" class="tabpane hidden"><div class="card"><h3>Category Rules</h3><p class="muted">Gateman daily target is configurable. Staff and Gardener remain non-OT.</p><div id="rulesForm"></div><p id="rulesMessage" class="message"></p></div></div><div class="adminReadme"><button id="readmeBtn" class="secondary">Read Me / Attendance Rules</button></div>
+<div id="readmePanel" class="readmePanel hidden">
+  <div class="card">
+    <h3>FCS Attendance - Rules and Operating Reference</h3>
+    <p class="muted">This is the complete reference for attendance, UT, SL, OT and report calculations. If a rule is changed, this reference should be updated at the same time.</p>
+
+    <h4>1. Purpose</h4>
+    <ul>
+      <li>FCS Attendance is used to enter daily timings from the gate register and maintain monthly attendance and overtime records.</li>
+    </ul>
+
+    <h4>2. Employees and Normal Timings</h4>
+    <ul>
+      <li><strong>Staff:</strong> 9:00am to 5:45pm; 45-minute break; normal duty span 8 hours 45 minutes; not eligible for OT.</li>
+      <li><strong>Driver:</strong> 9:00am to 5:45pm; 45-minute break; eligible for OT.</li>
+      <li><strong>Gardener:</strong> 8:30am to 5:10pm; 40-minute break; normal duty span 8 hours 40 minutes; not eligible for OT.</li>
+      <li><strong>Gateman:</strong> timing is flexible; normal duty target and break are configurable; eligible for OT. Current normal target is 525 minutes.</li>
+    </ul>
+
+    <h4>3. Overtime (OT)</h4>
+    <ul>
+      <li>OT is based on elapsed duty span compared with normal duty span.</li>
+      <li>For Driver and Gateman, up to <strong>15 minutes above normal duty does not count as OT</strong>.</li>
+      <li>Therefore, for a normal 9:00am to 5:45pm day: <strong>6:00pm = 0 OT; 6:01pm = 16 minutes OT; 7:01pm = 1 hour 16 minutes OT.</strong></li>
+      <li>Break is not deducted when deciding OT.</li>
+      <li>Staff and Gardener always have 0 OT.</li>
+    </ul>
+
+    <h4>4. Sunday and Holiday Duty</h4>
+    <ul>
+      <li>Driver and Gateman working on Sunday or an entered holiday are treated as full-day OT.</li>
+      <li>Entire duty time is OT.</li>
+      <li>No break is deducted on Sunday/holiday duty.</li>
+      <li>Sunday is identified automatically.</li>
+      <li>Holidays are maintained under Admin &gt; Holidays.</li>
+      <li>Sunday/holiday duty does not receive UT or SL.</li>
+    </ul>
+
+    <h4>5. Under Time (UT)</h4>
+    <ul>
+      <li>UT applies to OT-eligible employees when they are called early for office work.</li>
+      <li>Normal start for this rule is 9:00am.</li>
+      <li>For Driver and Gateman, IN before <strong>8:40am</strong> is treated as an early call and UT is given.</li>
+      <li>UT = 9:00am minus actual IN time.</li>
+      <li>Example: 7:30am IN = 1 hour 30 minutes UT.</li>
+      <li>8:40am or later = no UT.</li>
+      <li>A person merely arriving early at or after 8:40am does not receive UT.</li>
+      <li>Sunday and holiday duty never receives UT.</li>
+      <li><strong>Gautam special rule:</strong> official duty start is 7:30am. Arrival before 7:30am is voluntary early arrival and gives no UT. From 7:30am up to 9:00am, UT is calculated against 9:00am.</li>
+    </ul>
+
+    <h4>6. Short Leave (SL)</h4>
+    <ul>
+      <li>SL is calculated from actual IN time against employee's applicable normal start time.</li>
+      <li>For a normal 9:00am start, IN at 9:20am gives 20 minutes SL.</li>
+      <li>For Gautam, the official start is 7:30am for the special duty arrangement, so early arrival before 7:30am does not create UT and arrival after 7:30am is treated according to applicable SL/attendance rules.</li>
+      <li>Sunday and holiday duty does not receive SL.</li>
+      <li>SL can be manually adjusted in Admin for exceptional situations, such as approved short leave during the day.</li>
+    </ul>
+
+    <h4>7. Varinder Pal - Split Shift</h4>
+    <ul>
+      <li>Evening duty: approximately 6:00pm to 1:00am.</li>
+      <li>Morning duty: approximately 6:00am to 7:00am.</li>
+      <li>Normal total duty is 8 hours.</li>
+      <li>Sleep period from approximately 1:00am to 6:00am is not counted as duty.</li>
+      <li>No break deduction.</li>
+      <li>Time is rounded to 30-minute intervals.</li>
+      <li>Both periods are stored in the background; normal register display can show only final OUT time.</li>
+      <li>Example: 6:00pm to 1:00am + 6:00am to 7:00am = 8 hours, 0 OT.</li>
+      <li>Example: 6:00pm to 1:00am + 6:00am to 8:00am = 9 hours, 1 hour OT.</li>
+    </ul>
+
+    <h4>8. Attendance Status</h4>
+    <ul>
+      <li><strong>Staff:</strong> Present, First Half Leave, Second Half Leave, Full Day Leave.</li>
+      <li><strong>Other employees:</strong> Present, Absent, Leave, Half Day, Holiday, Sunday.</li>
+      <li>Sunday and entered holidays are identified automatically.</li>
+    </ul>
+
+    <h4>9. Staff Auto-Suggestion</h4>
+    <ul>
+      <li>IN by 9:30am and OUT by 1:15pm → Second Half Leave.</li>
+      <li>IN from 1:45pm and OUT from 5:15pm → First Half Leave.</li>
+      <li>IN by 9:30am and OUT from 5:15pm → Present.</li>
+      <li>Other combinations require manual attendance selection.</li>
+    </ul>
+
+    <h4>10. Daily Register and Admin Editing</h4>
+    <ul>
+      <li>Gateman enters timings from physical register.</li>
+      <li>Previous entries are not displayed to Gateman.</li>
+      <li>Admin can review and edit daily records.</li>
+      <li>Admin uses one <strong>Save Changes</strong> button to save changes across dates and people.</li>
+      <li>Blank IN/OUT clears an existing daily timing record for that employee/date.</li>
+      <li>Non-split employees cannot save an OUT time earlier than IN.</li>
+      <li>Date and employee identify each daily record.</li>
+      <li>UT, SL and OT fields can be manually adjusted for exceptional situations. Manual values are saved as overrides.</li>
+      <li>Person Register changes remain as drafts until Save Changes is pressed.</li>
+    </ul>
+
+    <h4>11. Offline / Mobile Sync</h4>
+    <ul>
+      <li>Gateman app can save entries locally when internet is unavailable.</li>
+      <li>Pending entries are automatically uploaded when internet becomes available.</li>
+      <li>The app retries pending uploads automatically.</li>
+      <li>A duplicate employee/date conflict is not silently discarded; it remains pending for review.</li>
+      <li>Do not clear browser data or app storage while entries are pending.</li>
+      <li><strong>Synced</strong> means pending local entries have been uploaded successfully.</li>
+    </ul>
+
+    <h4>12. Monthly Attendance Report</h4>
+    <ul>
+      <li>Monthly Report is for attendance only.</li>
+      <li>It shows all active employees.</li>
+      <li>Columns: Present, Half Day, Leave, Absent, Sunday, Holiday.</li>
+      <li>It does not show Worked Hours or OT.</li>
+      <li>For an incomplete current month, attendance is reported only up to latest date for which attendance/record data has been entered.</li>
+      <li>Future dates are not treated as Absent.</li>
+      <li>There is no overall total of all employees; totals are person-wise where applicable.</li>
+    </ul>
+
+    <h4>13. OT / UT Report</h4>
+    <ul>
+      <li>OT Report is separate from Monthly Attendance Report.</li>
+      <li>It is restricted to OT-eligible employees: Driver and Gateman.</li>
+      <li>It shows every calendar date in selected month.</li>
+      <li>Each employee has Date, IN, UT, OUT, SL, OT and Attendance.</li>
+      <li>IN 2 and OUT 2 are used internally for split-shift employees such as Varinder Pal.</li>
+      <li>Sunday/holiday OT is full elapsed duty time with no break deduction.</li>
+      <li>Regular Driver/Gateman OT uses 5:45pm as normal OUT, with up to 15 minutes ignored: 6:00pm = 0 OT and 6:01pm = 16 minutes OT.</li>
+      <li>Blank dates remain blank.</li>
+      <li>Each employee has a separate subtotal for OT, UT and SL. There is no combined total of all people.</li>
+      <li>Employee selection can include or exclude individual eligible employees.</li>
+      <li>Printed report is arranged one employee per page.</li>
+      <li>Excel export creates one worksheet/tab per employee, named after employee.</li>
+    </ul>
+
+    <h4>14. Important Data Rule</h4>
+    <ul>
+      <li>Attendance status and timing records are separate.</li>
+      <li>A timing record without an explicitly entered attendance status is treated as Present for monthly attendance reporting, unless date is a Sunday or entered holiday.</li>
+    </ul>
+
+    <h4>15. Admin Areas</h4>
+    <ul>
+      <li><strong>Person Register / Daily Check:</strong> review and edit daily timings and attendance.</li>
+      <li><strong>Monthly Report:</strong> monthly attendance summary.</li>
+      <li><strong>OT Report:</strong> detailed OT, UT and SL report.</li>
+      <li><strong>Employees:</strong> maintain employee list and employee-specific rules.</li>
+      <li><strong>Holidays:</strong> maintain holiday dates.</li>
+      <li><strong>Settings:</strong> maintain category rules.</li>
+    </ul>
+
+    <h4>16. Employee-Specific Rules Currently Configured</h4>
+    <ul>
+      <li><strong>Gautam:</strong> Gateman; 525-minute normal target; 7:30am official duty start for UT/SL handling.</li>
+      <li><strong>Varinder Pal:</strong> Gateman; 480-minute normal duty; 30-minute rounding; split shift.</li>
+      <li><strong>Barkha:</strong> Gateman; 495-minute normal duty; 15-minute break.</li>
+      <li><strong>Umesh:</strong> Gardener; 520-minute normal duty; 40-minute break.</li>
+      <li><strong>Staff:</strong> 525-minute normal duty; 45-minute break.</li>
+      <li><strong>Driver:</strong> 525-minute normal duty; 45-minute break.</li>
+    </ul>
+
+    <p><strong>Reference rule:</strong> If any attendance, UT, SL or OT calculation appears unusual, first check this reference and then check the employee/category rule in Admin Settings.</p>
+    <button id="closeReadmeBtn" class="secondary">Close</button>
+  </div>
+</div></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20260926-11"></script></body></html>
