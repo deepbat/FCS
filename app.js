@@ -61,18 +61,18 @@ async function save(){
     ot_eligible:e.category==='Driver'||e.category==='Gateman',ot_threshold_minutes:15,
     round_minutes:e.round_minutes||0,full_day_ot:false,updated_at:new Date().toISOString()
   };
-  const {error}=await db.from('daily_records').upsert(payload,{onConflict:'client_id'});
-  if(error){setMessage(error.message,true);return}
   const sunday=new Date(date+'T12:00:00').getDay()===0;
   let status=sunday?'Sunday':'Present';
   const {data:hol}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
   if(hol)status='Holiday';
-  const {error:ae}=await db.from('attendance').upsert(
-    {work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()},
-    {onConflict:'work_date,employee_id'}
-  );
-  if(ae){setMessage(ae.message,true);return}
-  clearInputs();setMessage('Saved successfully.');
+  const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
+  const result=await db.from('daily_records').upsert(payload,{onConflict:'client_id'});
+  const ar=await db.from('attendance').upsert(attendancePayload,{onConflict:'work_date,employee_id'});
+  if(result.error||ar.error){
+    const q=getQueue();q.push({record:payload,attendance:attendancePayload});setQueue(q);updatePending();
+    clearInputs();setMessage('Saved on this device. It will sync when internet is available.');return
+  }
+  updatePending();clearInputs();setMessage('Saved successfully.');
 }
 $('workDate').value=today();
 $('employee').addEventListener('change',updateSplit);
