@@ -383,7 +383,7 @@ async function exportRecords(){
   const date=$('recordDate').value||today();
   const [{data:emps},{data:rows},{data:att}]=await Promise.all([
     db.from('employees').select('name,category').eq('active',true).order('name'),
-    db.from('daily_records').select('work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
+    db.from('daily_records').select('work_date,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes,employee_id').eq('work_date',date),
     db.from('attendance').select('employee_id,status').eq('work_date',date)
   ]);
   const recordMap=new Map((rows||[]).map(r=>[r.employee_id,r]));
@@ -393,7 +393,7 @@ async function exportRecords(){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    const adj=r?dailyTimeAdjustments(e,inValue,date,false):{ut:0,sl:0};
+    const adj=r?{ut:Number(r.ut_minutes)||0,sl:Number(r.sl_minutes)||0}:{ut:0,sl:0};
     const ot=r?Number(r.ot_minutes)||0:0;
     rowsOut.push([fmtDate(date),e.name,e.category,inValue,fmtHHMM(adj.ut),outValue,fmtHHMM(adj.sl),fmtHHMM(ot),attMap.get(e.id)||'']);
   }
