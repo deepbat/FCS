@@ -589,13 +589,6 @@ function dailyTimeAdjustments(emp,inTime,date,isHoliday){
   const ut=emp.name==='Gautam'&&inMin>=7*60+30&&inMin<9*60?9*60-inMin:emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
   return {ut,sl};
 }
-function dailyAdjustments(emp,record,date,isHoliday){
-  const holidayOrSunday=isHoliday||new Date(date+'T00:00:00').getDay()===0;
-  if(!record||holidayOrSunday)return {ut:0,sl:0};
-  const ut=emp?.name==='Gautam'?0:utMinutesForRecord(record,new Set());
-  const sl=slMinutesForRecord(record,emp,new Set());
-  return {ut,sl};
-}
 async function saveAllChanges(){
   captureCurrentPersonDraft();
   const dirty=[...recordDrafts.entries()].filter(([,d])=>d.dirty);
