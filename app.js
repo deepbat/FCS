@@ -190,9 +190,10 @@ async function loadPersonRegister(){
   const holidaySet=new Set((hols||[]).map(h=>h.holiday_date));
   const personKeys=new Set(personEmployees.map(e=>e.id));
   document.querySelectorAll('#personTabs .personTab').forEach(x=>x.classList.toggle('active',x.dataset.id===selected.id));
-  let totalUT=0,totalSL=0,totalOT=0;
+  let totalUT=0,totalSL=0,totalOT=0,totalWorkingDays=0,totalPresent=0,totalHalfDay=0,totalLeave=0,totalAbsent=0,totalSunday=0,totalHoliday=0;
   window.__personSecondShift=new Map();
   window.__personHolidaySet=holidaySet;
+  const countThrough=month===monthNow()?today():end.slice(0,10);
   let html='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(let day=1;day<=days;day++){
     const date=start.slice(0,8)+String(day).padStart(2,'0');
@@ -202,6 +203,14 @@ async function loadPersonRegister(){
     const explicitStatus=attMap.get(date+'|'+emp.id);
     const autoStatus=personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date));
     const status=draft?(draft.status||autoStatus):autoStatus;
+    const dow=new Date(date+'T00:00:00').getDay(),isHoliday=holidaySet.has(date);
+    if(date<=countThrough){
+      if(isHoliday)totalHoliday++; else if(dow===0)totalSunday++; else totalWorkingDays++;
+      if(status==='Present')totalPresent++;
+      else if(['First Half Leave','Second Half Leave','Half Day'].includes(status))totalHalfDay++;
+      else if(['Full Day Leave','Leave'].includes(status))totalLeave++;
+      else if(status==='Absent')totalAbsent++;
+    }
     const inTime=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const outTime=draft?draft.out_time:(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''));
     const firstOut=draft?.first_out||(emp.split_shift?rec?.out_time?.slice(0,5)||'':'');
@@ -215,11 +224,13 @@ async function loadPersonRegister(){
     totalUT+=ut;totalSL+=sl;totalOT+=ot;
     const timeInput=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
     const adjustInput=(cls,val)=>'<input class="adjustEdit '+cls+'" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(val))+'">';
-    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'" data-orig-ut-display="'+esc(adjustmentInputValue(ut))+'" data-orig-sl-display="'+esc(adjustmentInputValue(sl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(ot))+'" data-orig-ut-override="'+(draft?(draft.ut_override==null?'':draft.ut_override):(rec?.ut_override_minutes==null?'':rec.ut_override_minutes))+'" data-orig-sl-override="'+(draft?(draft.sl_override==null?'':draft.sl_override):(rec?.sl_override_minutes==null?'':rec.sl_override_minutes))+'" data-orig-ot-override="'+(draft?(draft.ot_override==null?'':draft.ot_override):(rec?.ot_override_minutes==null?'':rec.ot_override_minutes))+'"><td>'+fmtDate(date)+'</td><td>'+timeInput('personIn',inTime)+'</td><td>'+adjustInput('personUT',ut)+'</td><td>'+timeInput('personOut',outTime)+'</td><td>'+adjustInput('personSL',sl)+'</td><td>'+adjustInput('personOT',ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
+    const rowClass=isHoliday?'holidayRow':(dow===0?'sundayRow':(['First Half Leave','Second Half Leave','Full Day Leave','Leave','Half Day'].includes(status)?'leaveRow':'')); 
+    html+='<tr class="'+rowClass+'" data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'" data-orig-ut-display="'+esc(adjustmentInputValue(ut))+'" data-orig-sl-display="'+esc(adjustmentInputValue(sl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(ot))+'" data-orig-ut-override="'+(draft?(draft.ut_override==null?'':draft.ut_override):(rec?.ut_override_minutes==null?'':rec.ut_override_minutes))+'" data-orig-sl-override="'+(draft?(draft.sl_override==null?'':draft.sl_override):(rec?.sl_override_minutes==null?'':rec.sl_override_minutes))+'" data-orig-ot-override="'+(draft?(draft.ot_override==null?'':draft.ot_override):(rec?.ot_override_minutes==null?'':rec.ot_override_minutes))+'"><td>'+fmtDate(date)+'</td><td>'+timeInput('personIn',inTime)+'</td><td>'+adjustInput('personUT',ut)+'</td><td>'+timeInput('personOut',outTime)+'</td><td>'+adjustInput('personSL',sl)+'</td><td>'+adjustInput('personOT',ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
   }
   $('personTabs').innerHTML=personEmployees.map((e,i)=>'<button type="button" class="secondary personTab '+(i===personEmployeeIndex?'active':'')+'" data-index="'+i+'" data-id="'+e.id+'">'+esc(e.name)+'</button>').join('');
   $('personTitle').textContent=esc(selected.name)+' | '+month;
-  $('personSummary').textContent=esc(selected.name)+' | '+esc(selected.category)+' | Total UT '+fmtMin(totalUT)+' | Total SL '+fmtMin(totalSL)+' | Total OT '+fmtMin(totalOT);
+  html+='<tr class="personTotal"><td colspan="7"><strong>Total Working Days:</strong> '+totalWorkingDays+' &nbsp; <strong>Present:</strong> '+totalPresent+' &nbsp; <strong>Half Day:</strong> '+totalHalfDay+' &nbsp; <strong>Leave:</strong> '+totalLeave+' &nbsp; <strong>Absent:</strong> '+totalAbsent+' &nbsp; <strong>Sunday:</strong> '+totalSunday+' &nbsp; <strong>Holiday:</strong> '+totalHoliday+' &nbsp; <strong>UT:</strong> '+fmtMin(totalUT)+' &nbsp; <strong>SL:</strong> '+fmtMin(totalSL)+' &nbsp; <strong>OT:</strong> '+fmtMin(totalOT)+'</td></tr>';
+  $('personSummary').textContent=esc(selected.name)+' | '+esc(selected.category);
   $('personRegisterTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance,.adjustEdit').forEach(el=>{
@@ -647,12 +658,9 @@ async function getMonthlyAttendanceData(){
 }
 function monthlyAttendanceHtml(data){
   let out='<tr><th>S. No.</th><th>Name</th><th>Category</th><th>Present</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr>';
-  const totals={present:0,halfDay:0,leave:0,absent:0,sunday:0,holiday:0};
   data.rows.forEach(r=>{
-    for(const k of Object.keys(totals))totals[k]+=r[k];
-    out+='<tr><td>'+r.no+'.</td><td>'+esc(r.employee.name)+'</td><td>'+esc(r.employee.category)+'</td><td>'+r.present+'</td><td>'+r.halfDay+'</td><td>'+r.leave+'</td><td>'+r.absent+'</td><td>'+r.sunday+'</td><td>'+r.holiday+'</td></tr>';
+    out+='<tr><td>'+r.no+'.</td><td>'+esc(r.employee.name)+'</td><td>'+esc(r.employee.category)+'</td><td>'+r.present+'</td><td>'+r.halfDay+'</td><td>'+r.leave+'</td><td>'+r.absent+'</td><td class="sundayCell">'+r.sunday+'</td><td class="holidayCell">'+r.holiday+'</td></tr>';
   });
-  out+='<tr class="reportTotal"><td></td><td>Total</td><td></td><td>'+totals.present+'</td><td>'+totals.halfDay+'</td><td>'+totals.leave+'</td><td>'+totals.absent+'</td><td>'+totals.sunday+'</td><td>'+totals.holiday+'</td></tr>';
   return out;
 }
 async function generateAttendanceReport(){
@@ -813,12 +821,12 @@ function otReportHtml(data){
     out+='<table class="otPersonTable"><tr><th colspan="7" class="employeeHeading">'+esc(r.employee.name)+'</th></tr>';
     out+='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
     r.days.forEach(d=>{
-      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+esc(d.out2||d.out1)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+esc(d.attendance)+'</td></tr>';
+      const cls=d.attendance==='Sunday'?'sundayRow':(d.attendance==='Holiday'?'holidayRow':(['Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave'].includes(d.attendance)?'leaveRow':''));
+      out+='<tr class="'+cls+'"><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+esc(d.out2||d.out1)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+esc(d.attendance)+'</td></tr>';
     });
     out+='<tr class="reportSubtotal"><td>Sub total</td><td></td><td>'+fmtHHMM(r.utTotal)+'</td><td></td><td>'+fmtHHMM(r.slTotal)+'</td><td>'+fmtHHMM(r.otTotal)+'</td><td></td></tr>';
     out+='</table></div>';
   });
-  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: UT '+fmtHHMM(grandUT)+' + OT '+fmtHHMM(grandOT)+' + SL '+fmtHHMM(grandSL)+'</div>';
   return out||'<div class="muted">No OT or UT for selected employees.</div>';
 }
 function safeSheetName(name,used){
