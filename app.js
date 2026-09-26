@@ -473,11 +473,42 @@ function fmtHHMM(mins){
   if(mins==null||mins<=0)return '';
   return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 }
+function normalStartMinutesForEmployee(emp){
+  if(emp?.split_shift)return 18*60;
+  const rule=rules.find(r=>r.category===emp?.category);
+  if(rule?.normal_start){
+    const m=String(rule.normal_start).match(/^(\d{2}):(\d{2})/);
+    if(m)return Number(m[1])*60+Number(m[2]);
+  }
+  if(emp?.category==='Gardener')return 8*60+30;
+  return 9*60;
+}
+function slMinutesForRecord(record,emp,holidaySet){
+  if(!record||!emp)return 0;
+  if(new Date(record.work_date+'T00:00:00').getDay()===0||holidaySet.has(record.work_date))return 0;
+  const inMin=minutesFromHHMM(record.in_time);
+  const start=normalStartMinutesForEmployee(emp);
+  return inMin!=null&&inMin>start?inMin-start:0;
+}
+function signedMinutesText(mins){
+  const n=Number(mins)||0;
+  if(n===0)return '0h 00m';
+  const sign=n<0?'-':'';
+  const a=Math.abs(n);
+  return sign+Math.floor(a/60)+'h '+String(a%60).padStart(2,'0')+'m';
+}
+function dailyAdjustments(emp,record,date,isHoliday){
+  const holidayOrSunday=isHoliday||new Date(date+'T00:00:00').getDay()===0;
+  if(!record||holidayOrSunday)return {ut:0,sl:0};
+  const ut=utMinutesForRecord(record,new Set());
+  const sl=slMinutesForRecord(record,emp,new Set());
+  return {ut,sl};
+}
 async function getOTReportBase(){
   const month=$('reportMonth').value||monthNow();
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError}]=await Promise.all([
-    db.from('employees').select('id,name,category').eq('active',true).in('category',['Driver','Gateman']).order('name'),
+    db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).in('category',['Driver','Gateman']).order('name'),
     db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes').gte('work_date',start).lt('work_date',end),
     db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end)
   ]);
@@ -487,13 +518,14 @@ async function getOTReportBase(){
   const byKey=new Map((records||[]).map(r=>[r.work_date+'|'+r.employee_id,r]));
   const totals=new Map();
   for(const e of emps||[]){
-    let ot=0,ut=0;
+    let ot=0,ut=0,sl=0;
     for(const r of records||[]){
       if(r.employee_id!==e.id)continue;
       ot+=Number(r.ot_minutes)||0;
       ut+=utMinutesForRecord(r,holidaySet);
+      sl+=slMinutesForRecord(r,e,holidaySet);
     }
-    totals.set(e.id,{ot,ut});
+    totals.set(e.id,{ot,ut,sl,net:ut+ot-sl});
   }
   return {month,emps:emps||[],records:records||[],holidaySet,byKey,totals};
 }
@@ -502,9 +534,9 @@ async function loadReportOptions(){
     const base=await getOTReportBase();
     $('reportMonth').value=base.month;
     $('reportPeople').innerHTML=base.emps.map(e=>{
-      const t=base.totals.get(e.id)||{ot:0,ut:0};
-      const any=t.ot+t.ut>0;
-      return '<label class="reportPerson"><input type="checkbox" class="reportEmployeeCheck" value="'+e.id+'" '+(any?'checked':'')+'><span>'+esc(e.name)+' ('+esc(e.category)+')</span><small>OT '+fmtHHMM(t.ot)+' / UT '+fmtHHMM(t.ut)+'</small></label>';
+      const t=base.totals.get(e.id)||{ot:0,ut:0,sl:0,net:0};
+      const any=t.ot+t.ut+t.sl>0;
+      return '<label class="reportPerson"><input type="checkbox" class="reportEmployeeCheck" value="'+e.id+'" '+(any?'checked':'')+'><span>'+esc(e.name)+' ('+esc(e.category)+')</span><small>OT '+fmtHHMM(t.ot)+' / UT '+fmtHHMM(t.ut)+' / SL '+fmtHHMM(t.sl)+'</small></label>';
     }).join('');
   }catch(e){$('reportPeople').innerHTML='<span class="muted">'+esc(e.message||'Unable to load employees.')+'</span>'}
 }
@@ -517,35 +549,36 @@ async function getOTReportData(){
   const daysInMonth=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
   const rows=employees.map((e,i)=>{
     const days=[];
-    let otTotal=0,utTotal=0;
+    let otTotal=0,utTotal=0,slTotal=0;
     for(let day=1;day<=daysInMonth;day++){
       const date=base.month+'-'+String(day).padStart(2,'0');
       const r=base.byKey.get(date+'|'+e.id);
       const ot=r?Number(r.ot_minutes)||0:0;
       const ut=utMinutesForRecord(r,base.holidaySet);
-      otTotal+=ot;utTotal+=ut;
-      days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut});
+      const sl=slMinutesForRecord(r,e,base.holidaySet);
+      otTotal+=ot;utTotal+=ut;slTotal+=sl;
+      days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,net:ut+ot-sl});
     }
-    return {no:i+1,employee:e,days,otTotal,utTotal,total:otTotal+utTotal};
+    return {no:i+1,employee:e,days,otTotal,utTotal,slTotal,total:otTotal+utTotal-slTotal};
   }).filter(r=>!$('otOnly').checked||r.total>0);
   return {month:base.month,rows};
 }
 function otReportHtml(data){
   let out='';
-  let grandOT=0,grandUT=0;
+  let grandOT=0,grandUT=0,grandSL=0;
   data.rows.forEach(r=>{
-    grandOT+=r.otTotal;grandUT+=r.utTotal;
+    grandOT+=r.otTotal;grandUT+=r.utTotal;grandSL+=r.slTotal;
     out+='<div class="otPersonReport">';
     out+='<table class="otPersonTable"><tr><th colspan="7" class="employeeHeading">'+esc(r.employee.name)+'</th></tr>';
-    out+='<tr><th>Date</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>OT</th><th>UT</th></tr>';
+    out+='<tr><th>Date</th><th>IN</th><th>OUT</th><th>IN 2</th><th>OUT 2</th><th>UT</th><th>OT</th><th>SL</th><th>Net</th></tr>';
     r.days.forEach(d=>{
-      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+esc(d.out1)+'</td><td>'+esc(d.in2)+'</td><td>'+esc(d.out2)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+fmtHHMM(d.ut)+'</td></tr>';
+      out+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.in1)+'</td><td>'+esc(d.out1)+'</td><td>'+esc(d.in2)+'</td><td>'+esc(d.out2)+'</td><td>'+fmtHHMM(d.ut)+'</td><td>'+fmtHHMM(d.ot)+'</td><td>'+fmtHHMM(d.sl)+'</td><td>'+signedMinutesText(d.net)+'</td></tr>';
     });
-    out+='<tr class="reportSubtotal"><td>Sub total</td><td></td><td></td><td></td><td></td><td>'+fmtHHMM(r.otTotal)+'</td><td>'+fmtHHMM(r.utTotal)+'</td></tr>';
-    out+='<tr class="reportTotal"><td>Total</td><td colspan="4"></td><td>'+fmtHHMM(r.total)+'</td><td></td></tr>';
+    out+='<tr class="reportSubtotal"><td>Sub total</td><td colspan="4"></td><td>'+fmtHHMM(r.utTotal)+'</td><td>'+fmtHHMM(r.otTotal)+'</td><td>'+fmtHHMM(r.slTotal)+'</td><td>'+signedMinutesText(r.total)+'</td></tr>';
+    out+='<tr class="reportTotal"><td>Net Total</td><td colspan="7"></td><td>'+signedMinutesText(r.total)+'</td></tr>';
     out+='</table></div>';
   });
-  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: OT '+fmtHHMM(grandOT)+' + UT '+fmtHHMM(grandUT)+' = '+fmtHHMM(grandOT+grandUT)+'</div>';
+  if(data.rows.length>1)out+='<div class="reportGrandTotal">Grand Total: UT '+fmtHHMM(grandUT)+' + OT '+fmtHHMM(grandOT)+' - SL '+fmtHHMM(grandSL)+' = '+signedMinutesText(grandUT+grandOT-grandSL)+'</div>';
   return out||'<div class="muted">No OT or UT for selected employees.</div>';
 }
 function safeSheetName(name,used){
@@ -577,13 +610,13 @@ async function exportReport(){
         ['Category',r.employee.category],
         ['Period','01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})],
         [],
-        ['Date','IN','OUT','IN 2','OUT 2','OT','UT']
+        ['Date','IN','OUT','IN 2','OUT 2','UT','OT','SL','Net']
       ];
-      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,d.out1,d.in2,d.out2,fmtHHMM(d.ot),fmtHHMM(d.ut)]));
-      aoa.push(['Sub total','','','','',fmtHHMM(r.otTotal),fmtHHMM(r.utTotal)]);
-      aoa.push(['Total','','','','',fmtHHMM(r.total),'']);
+      r.days.forEach(d=>aoa.push([fmtDate(d.date),d.in1,d.out1,d.in2,d.out2,fmtHHMM(d.ut),fmtHHMM(d.ot),fmtHHMM(d.sl),signedMinutesText(d.net)]));
+      aoa.push(['Sub total','','','','',fmtHHMM(r.utTotal),fmtHHMM(r.otTotal),fmtHHMM(r.slTotal),signedMinutesText(r.total)]);
+      aoa.push(['Net Total','','','','','','','',signedMinutesText(r.total)]);
       const ws=XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols']=[{wch:14},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10}];
+      ws['!cols']=[{wch:14},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:10},{wch:10},{wch:10}];
       XLSX.utils.book_append_sheet(wb,ws,safeSheetName(r.employee.name,used));
     }
     if(!wb.SheetNames.length)throw new Error('No employees selected.');
@@ -610,6 +643,7 @@ async function saveAllChanges(){
         const split=!!emp.split_shift;
         const ni=normalizeTime(d.in_time||'');
         const no=normalizeTime(d.out_time||'');
+        const old=idMap.get(emp.id);
         const legacy=split?legacySplitFor(emp,old):null;
         const ni2=split?normalizeTime(d.in_time_2||legacy?.in_time_2||''):'';
         const no2=split?no:'';
@@ -617,7 +651,7 @@ async function saveAllChanges(){
         if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+' on '+fmtDate(date)+'.');
         if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+' on '+fmtDate(date)+'.');
         if(split&&(!firstOut||(!ni2&&!no2)||(!ni2&&no2)))throw new Error('Unable to determine split-shift times for '+emp.name+' on '+fmtDate(date)+'.');
-        const er=effectiveRule(emp),old=idMap.get(emp.id);
+        const er=effectiveRule(emp);
         if(ni&&no){
           const payload={
             in_time:ni+':00',
