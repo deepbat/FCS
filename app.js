@@ -576,7 +576,7 @@ async function getOTReportData(){
       days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,net:ut+ot-sl});
     }
     return {no:i+1,employee:e,days,otTotal,utTotal,slTotal,total:otTotal+utTotal-slTotal};
-  }).filter(r=>!$('otOnly').checked||r.total>0);
+  }).filter(r=>!$('otOnly').checked||(r.otTotal+r.utTotal+r.slTotal)>0);
   return {month:base.month,rows};
 }
 function otReportHtml(data){
@@ -607,7 +607,7 @@ async function generateReport(){
   const btn=$('generateReport');btn.disabled=true;btn.textContent='Loading...';
   try{
     const data=await getOTReportData();
-    $('reportTitle').textContent='OVERTIME AND UNDER TIME REPORT';
+    $('reportTitle').textContent='OVERTIME, UNDER TIME AND SHORT LEAVE REPORT';
     const last=new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
     $('reportSummary').textContent='PERIOD 01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+last;
     $('reportTable').innerHTML=otReportHtml(data);
@@ -621,7 +621,7 @@ async function exportReport(){
     const wb=XLSX.utils.book_new(),used=new Set();
     for(const r of data.rows){
       const aoa=[
-        ['OVERTIME AND UNDER TIME REPORT'],
+        ['OVERTIME, UNDER TIME AND SHORT LEAVE REPORT'],
         ['Employee',r.employee.name],
         ['Category',r.employee.category],
         ['Period','01/'+data.month.slice(5,7)+'/'+data.month.slice(0,4)+' to '+new Date(new Date(data.month+'-01T00:00:00').getFullYear(),new Date(data.month+'-01T00:00:00').getMonth()+1,0).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})],
