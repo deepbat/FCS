@@ -106,7 +106,8 @@ function personStatusOptions(emp,status){
   return '<option></option>'+list.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('');
 }
 
-// Single source of truth for Attendance Register status. Person view and Monthly Summary both use this result.\nfunction attendanceStatusForRecord(emp,rec,date,explicit,holiday){
+// Single source of truth for Attendance Register status. Person view and Monthly Summary both use this result.
+function attendanceStatusForRecord(emp,rec,date,explicit,holiday){
   const dow=new Date(date+'T00:00:00').getDay();
   if(holiday)return 'Holiday';
   if(dow===0)return 'Sunday';
