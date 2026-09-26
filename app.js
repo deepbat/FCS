@@ -480,7 +480,7 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+(rec?.ut_minutes??0)+'" data-stored-sl="'+(rec?.sl_minutes??0)+'" data-stored-ot="'+(rec?.ot_minutes??0)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+(emp.name==='Gautam'?0:(rec?.ut_minutes??0))+'" data-stored-sl="'+(rec?.sl_minutes??0)+'" data-stored-ot="'+(rec?.ot_minutes??0)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
