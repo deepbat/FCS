@@ -493,7 +493,7 @@ async function getMonthlyAttendanceData(){
       if(holidayMap.has(date))status='Holiday';
       else if(dow===0)status='Sunday';
       else if(explicit)status=explicit;
-      else if(hasRecord)status=attendanceStatusForRecord(e,rec,date,'',false)||'Present';
+      else if(hasRecord){const inferred=attendanceStatusForRecord(e,rec,date,'',false);status=inferred||'Present';}
       else status='Absent';
       if(status==='Present')c.present++;
       else if(status==='First Half Leave'||status==='Second Half Leave'||status==='Half Day')c.halfDay++;
