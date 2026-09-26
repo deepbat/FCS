@@ -177,6 +177,21 @@ function exportEmployee(){
  employees.filter(e=>e.active).forEach(e=>{
    const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
    const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Attendance']});
+   const personTotals={ot:0,ut:0,sl:0};
+   rows.forEach(r=>{
+     personTotals.ut+=parseAdj(r.UT)||0;
+     personTotals.sl+=parseAdj(r.SL)||0;
+     personTotals.ot+=parseAdj(r.OT)||0;
+   });
+   XLSX.utils.sheet_add_json(ws,[{
+     Date:'TOTAL',
+     IN:'',
+     UT:fmtMin(personTotals.ut),
+     OUT:'',
+     SL:fmtMin(personTotals.sl),
+     OT:fmtMin(personTotals.ot),
+     Attendance:''
+   }],{skipHeader:true,origin:-1});
    ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:20}];
    let name=(e.name||'Employee').replace(/[\\/?*\[\]:]/g,' ').slice(0,31)||'Employee',base=name,n=2;
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
