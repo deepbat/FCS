@@ -997,7 +997,7 @@ $('refreshRecords').onclick=()=>{captureCurrentRecordDrafts();loadRecords()};
 $('recordDate').onchange=()=>{captureCurrentRecordDrafts();loadRecords()};
 $('prevRecordDate').onclick=()=>moveRecordDate(-1);
 $('nextRecordDate').onclick=()=>moveRecordDate(1);$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
-$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();
+$('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();setupPersonRegister();
 
 (async()=>{
   loadCache();await loadRules();await loadEmployees();await updatePending();await syncQueue();await checkSession();
