@@ -231,7 +231,7 @@ async function loadRecords(){
   const date=$('recordDate').value||today();
   const [{data:emps,error:empError},{data:rows,error:rowError},{data:att},{data:hols}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,employee_id').eq('work_date',date),
+    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,ut_minutes,sl_minutes,employee_id').eq('work_date',date),
     db.from('attendance').select('work_date,employee_id,status').eq('work_date',date),
     db.from('holidays').select('holiday_date,name').eq('holiday_date',date)
   ]);
@@ -290,7 +290,7 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+(rec?.ut_minutes??0)+'" data-stored-sl="'+(rec?.sl_minutes??0)+'" data-stored-ot="'+(rec?.ot_minutes??0)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
@@ -361,13 +361,17 @@ function refreshLiveTotals(){
     const live=emp.split_shift
       ?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday)
       :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
-    const adj=dailyTimeAdjustments(emp,ni,date,isHoliday);
-    row.children[4].textContent=live.worked==null?'':fmtMin(adj.ut);
-    row.children[6].textContent=live.worked==null?'':fmtMin(adj.sl);
-    row.children[7].textContent=live.worked==null?'':fmtMin(live.ot);
-    if(live.worked!=null)worked+=live.worked;
-    if(live.ot!=null)ot+=live.ot;
-    ut+=adj.ut;sl+=adj.sl;
+    const dirty=row.dataset.dirty==='1';
+    const rowWorked=dirty?live.worked:Number(row.dataset.storedWorked);
+    const rowOt=dirty?live.ot:Number(row.dataset.storedOt);
+    const rowUt=dirty?dailyTimeAdjustments(emp,ni,date,isHoliday).ut:Number(row.dataset.storedUt);
+    const rowSl=dirty?dailyTimeAdjustments(emp,ni,date,isHoliday).sl:Number(row.dataset.storedSl);
+    row.children[4].textContent=rowWorked==null||Number.isNaN(rowWorked)?'':fmtMin(rowUt);
+    row.children[6].textContent=rowWorked==null||Number.isNaN(rowWorked)?'':fmtMin(rowSl);
+    row.children[7].textContent=rowOt==null||Number.isNaN(rowOt)?'':fmtMin(rowOt);
+    if(rowWorked!=null&&!Number.isNaN(rowWorked))worked+=rowWorked;
+    if(rowOt!=null&&!Number.isNaN(rowOt))ot+=rowOt;
+    ut+=Number(rowUt)||0;sl+=Number(rowSl)||0;
   });
   $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl);
 }
@@ -542,7 +546,7 @@ async function getOTReportBase(){
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError},{data:atts,error:attError}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).in('category',['Driver','Gateman']).order('name'),
-    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes').gte('work_date',start).lt('work_date',end),
+    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes,ut_minutes,sl_minutes').gte('work_date',start).lt('work_date',end),
     db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
   ]);
@@ -557,8 +561,8 @@ async function getOTReportBase(){
     for(const r of records||[]){
       if(r.employee_id!==e.id)continue;
       ot+=Number(r.ot_minutes)||0;
-      ut+=utMinutesForRecord(r,holidaySet);
-      sl+=slMinutesForRecord(r,e,holidaySet);
+      ut+=Number(r.ut_minutes)||0;
+      sl+=Number(r.sl_minutes)||0;
     }
     totals.set(e.id,{ot,ut,sl,net:ut+ot-sl});
   }
@@ -589,8 +593,8 @@ async function getOTReportData(){
       const date=base.month+'-'+String(day).padStart(2,'0');
       const r=base.byKey.get(date+'|'+e.id);
       const ot=r?Number(r.ot_minutes)||0:0;
-      const ut=utMinutesForRecord(r,base.holidaySet);
-      const sl=slMinutesForRecord(r,e,base.holidaySet);
+      const ut=Number(r?.ut_minutes)||0;
+      const sl=Number(r?.sl_minutes)||0;
       otTotal+=ot;utTotal+=ut;slTotal+=sl;
       days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,attendance:base.attendanceByKey.get(date+'|'+e.id)||''});
     }
