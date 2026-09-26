@@ -112,14 +112,14 @@ function capturePersonRowDraft(row){
   const status=row.querySelector('.personAttendance')?.value||'';
   const bg=window.__personSecondShift?.get(employeeId+'|'+date)||{};
   const oldIn=row.dataset.origIn||'',oldOut=row.dataset.origOut||'',oldStatus=row.dataset.origStatus||'',oldFirst=row.dataset.origFirstOut||'',oldIn2=row.dataset.origIn2||'';
-  const readOverride=(selector,origDisplay,origOverride)=>{
+  const readOverride=(selector,field,origDisplay,origOverride)=>{
     const raw=String(row.querySelector(selector)?.value??'').trim();
-    if(raw===origDisplay)return origOverride===''?null:Number(origOverride);
+    if(row.dataset[field+'OverrideDirty']!=='1')return origOverride===''?null:Number(origOverride);
     return raw===''?null:parseAdjustmentMinutes(raw);
   };
-  const utOverride=readOverride('.personUT',row.dataset.origUtDisplay||'',row.dataset.origUtOverride||'');
-  const slOverride=readOverride('.personSL',row.dataset.origSlDisplay||'',row.dataset.origSlOverride||'');
-  const otOverride=readOverride('.personOT',row.dataset.origOtDisplay||'',row.dataset.origOtOverride||'');
+  const utOverride=readOverride('.personUT','ut',row.dataset.origUtDisplay||'',row.dataset.origUtOverride||'');
+  const slOverride=readOverride('.personSL','sl',row.dataset.origSlDisplay||'',row.dataset.origSlOverride||'');
+  const otOverride=readOverride('.personOT','ot',row.dataset.origOtDisplay||'',row.dataset.origOtOverride||'');
   const adjChanged=String(row.querySelector('.personUT')?.value??'').trim()!==(row.dataset.origUtDisplay||'')||
     String(row.querySelector('.personSL')?.value??'').trim()!==(row.dataset.origSlDisplay||'')||
     String(row.querySelector('.personOT')?.value??'').trim()!==(row.dataset.origOtDisplay||'');
@@ -242,11 +242,24 @@ async function loadPersonRegister(){
     el.addEventListener('change',()=>{
       const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals();
     });
-    if(el.classList.contains('adjustEdit'))el.addEventListener('blur',()=>{
-      const v=String(el.value||'').trim();
-      if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v));
-      capturePersonRowDraft(el.closest('tr[data-person-row]'));setSaveStatus('unsaved');refreshPersonLiveTotals();
-    });
+    if(el.classList.contains('adjustEdit')){
+      const markOverrideDirty=()=>{
+        const row=el.closest('tr[data-person-row]');
+        if(row){
+          if(el.classList.contains('personUT'))row.dataset.utOverrideDirty='1';
+          if(el.classList.contains('personSL'))row.dataset.slOverrideDirty='1';
+          if(el.classList.contains('personOT'))row.dataset.otOverrideDirty='1';
+        }
+      };
+      el.addEventListener('input',markOverrideDirty);
+      el.addEventListener('change',markOverrideDirty);
+      el.addEventListener('blur',()=>{
+        markOverrideDirty();
+        const v=String(el.value||'').trim();
+        if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v));
+        capturePersonRowDraft(el.closest('tr[data-person-row]'));setSaveStatus('unsaved');refreshPersonLiveTotals();
+      });
+    }
   });
 }
 
@@ -258,7 +271,9 @@ function refreshPersonLiveTotals(){
     const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,window.__personHolidaySet?.has(date)||false);
     const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false),d=recordDrafts.get(date+'|'+emp.id);
     const u=parseAdjustmentMinutes(row.querySelector('.personUT')?.value),s=parseAdjustmentMinutes(row.querySelector('.personSL')?.value),o=parseAdjustmentMinutes(row.querySelector('.personOT')?.value);
-    const ru=d?(d.ut_override!=null?d.ut_override:adj.ut):u,rs=d?(d.sl_override!=null?d.sl_override:adj.sl):s,ro=d?(d.ot_override!=null?d.ot_override:(live?.ot??0)):o;
+    const ru=row.dataset.utOverrideDirty==='1'&&u!=null?u:(d?.ut_override!=null?d.ut_override:adj.ut);
+    const rs=row.dataset.slOverrideDirty==='1'&&s!=null?s:(d?.sl_override!=null?d.sl_override:adj.sl);
+    const ro=row.dataset.otOverrideDirty==='1'&&o!=null?o:(d?.ot_override!=null?d.ot_override:(live?.ot??0));
     const ui=row.querySelector('.personUT'),si=row.querySelector('.personSL'),oi=row.querySelector('.personOT');
     if(document.activeElement!==ui)ui.value=fmtMin(ru);
     if(document.activeElement!==si)si.value=fmtMin(rs);
