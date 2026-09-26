@@ -1,186 +1,38 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111827"><meta name="description" content="FCS Staff Attendance and Overtime"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script><title>FCS Attendance</title></head><body><main class="app"><header class="topbar"><div><h1>FCS Attendance</h1><p id="subtitle">Daily register entry</p></div><a id="adminBtn" class="ghost" href="./admin.html" style="text-decoration:none">Admin</a></header><section id="gateView" class="view"><div class="card"><div class="syncbar"><span id="syncStatus">Ready</span><span id="pendingCount"></span></div><label>Date</label><input id="workDate" type="date"><label>Employee</label><select id="employee"></select><div class="timegrid"><div><label id="inTimeLabel">IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="5" placeholder="09:00" autocomplete="off"></div><div><label id="outTimeLabel">OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="5" placeholder="17:45" autocomplete="off"></div></div><div id="gateSplitFields" class="timegrid hidden"><div><label>IN 2</label><input id="inTime2" type="text" inputmode="numeric" maxlength="5" placeholder="06:00" autocomplete="off"></div><div><label>OUT 2</label><input id="outTime2" type="text" inputmode="numeric" maxlength="5" placeholder="07:00" autocomplete="off"></div></div><button id="saveBtn" class="primary">Save</button><p id="message" class="message"></p></div><div class="smallnote">Enter timings from register. Previous entries are not displayed.</div></section><section id="loginView" class="view hidden"><div class="card"><h2>Admin Login</h2><p class="muted">Use your Supabase account to access records and settings.</p><label>Email</label><input id="email" type="email" autocomplete="username"><label>Password</label><input id="password" type="password" autocomplete="current-password"><button id="loginBtn" class="primary">Login</button><button id="signupBtn" class="secondary">Create Admin Account</button><button id="backBtn" class="ghost full">Back</button><p id="loginMessage" class="message"></p></div></section><section id="adminView" class="view hidden"><div class="adminHead"><div><h2>Admin</h2><p id="adminUser" class="muted"></p></div><div class="adminActions"><button id="saveAllBtn" class="primary adminSave">Save Changes</button><span id="saveStatus" class="saveStatus">All changes saved</span><button id="logoutBtn" class="ghost">Logout</button></div></div><div class="tabs"><button data-tab="records" class="tab active">Attendance</button><button data-tab="employees" class="tab">Employees</button><button data-tab="holidays" class="tab">Holidays</button><button data-tab="settings" class="tab">Settings</button></div><div id="recordsTab" class="tabpane">
-<div class="recordModes"><button id="personModeBtn" class="secondary activeMode">Attendance Register</button><button id="monthlyModeBtn" class="secondary">Monthly Summary</button></div>
-<div id="personRegisterPane">
-<div class="toolbar personToolbar"><input id="personMonth" type="month"><button id="personPrev" class="secondary">←</button><div id="personTabs" class="personTabs"></div><button id="personNext" class="secondary">→</button><button id="printPersonRegister" class="secondary">Print</button><button id="exportPersonRegister" class="secondary">Excel/CSV</button></div>
-<div id="personTitle" class="printTitle"></div>
-<div id="personSummary" class="summary"></div>
-<div class="tablewrap"><table id="personRegisterTable"></table></div>
-</div>
-<div id="monthlySummaryPane" class="hidden">
-<div class="toolbar">
-<input id="attendanceMonth" type="month">
-<button id="generateAttendanceReport" class="secondary">Generate</button>
-<button id="printAttendanceReport" class="secondary">Print</button>
-<button id="exportAttendanceReport" class="secondary">Excel/CSV</button>
-</div>
-<div id="attendanceReportTitle" class="printTitle"></div>
-<div id="attendanceReportSummary" class="summary"></div>
-<div class="tablewrap"><table id="attendanceReportTable"></table></div>
-</div>
-</div><div id="employeesTab" class="tabpane hidden"><div class="card"><h3>Add Employee</h3><div class="formgrid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCategory"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmployee" class="primary">Add</button></div></div><div class="tablewrap"><table id="employeesTable"></table></div></div><div id="holidaysTab" class="tabpane hidden"><div class="card"><h3>Add Holiday</h3><div class="formgrid"><input id="holidayDate" type="date"><input id="holidayName" placeholder="Holiday name"><button id="addHoliday" class="primary">Add</button></div></div><div class="tablewrap"><table id="holidaysTable"></table></div></div><div id="settingsTab" class="tabpane hidden"><div class="card"><h3>Category Rules</h3><p class="muted">Gateman daily target is configurable. Staff and Gardener remain non-OT.</p><div id="rulesForm"></div><p id="rulesMessage" class="message"></p></div></div><div class="adminReadme"><button id="readmeBtn" class="secondary">Read Me / Attendance Rules</button></div>
-<div id="readmePanel" class="readmePanel hidden">
-  <div class="card">
-    <h3>FCS Attendance - Rules and Operating Reference</h3>
-    <p class="muted">This is the complete reference for attendance, UT, SL, OT and report calculations. If a rule is changed, this reference should be updated at the same time.</p>
-
-    <h4>1. Purpose</h4>
-    <ul>
-      <li>FCS Attendance is used to enter daily timings from the gate register and maintain monthly attendance and overtime records.</li>
-    </ul>
-
-    <h4>2. Employees and Normal Timings</h4>
-    <ul>
-      <li><strong>Staff:</strong> 9:00am to 5:45pm; 45-minute break; normal duty span 8 hours 45 minutes; not eligible for OT.</li>
-      <li><strong>Driver:</strong> 9:00am to 5:45pm; 45-minute break; eligible for OT.</li>
-      <li><strong>Gardener:</strong> 8:30am to 5:10pm; 40-minute break; normal duty span 8 hours 40 minutes; not eligible for OT.</li>
-      <li><strong>Gateman:</strong> timing is flexible; normal duty target and break are configurable; eligible for OT. Current normal target is 525 minutes.</li>
-    </ul>
-
-    <h4>3. Overtime (OT)</h4>
-    <ul>
-      <li>OT is based on elapsed duty span compared with normal duty span.</li>
-      <li>For Driver and Gateman, up to <strong>15 minutes above normal duty does not count as OT</strong>.</li>
-      <li>Therefore, for a normal 9:00am to 5:45pm day: <strong>6:00pm = 0 OT; 6:01pm = 16 minutes OT; 7:01pm = 1 hour 16 minutes OT.</strong></li>
-      <li>Break is not deducted when deciding OT.</li>
-      <li>Staff and Gardener always have 0 OT.</li>
-    </ul>
-
-    <h4>4. Sunday and Holiday Duty</h4>
-    <ul>
-      <li>Driver and Gateman working on Sunday or an entered holiday are treated as full-day OT.</li>
-      <li>Entire duty time is OT.</li>
-      <li>No break is deducted on Sunday/holiday duty.</li>
-      <li>Sunday is identified automatically.</li>
-      <li>Holidays are maintained under Admin &gt; Holidays.</li>
-      <li>Sunday/holiday duty does not receive UT or SL.</li>
-    </ul>
-
-    <h4>5. Under Time (UT)</h4>
-    <ul>
-      <li>UT applies to OT-eligible employees when they are called early for office work.</li>
-      <li>Normal start for this rule is 9:00am.</li>
-      <li>For Driver and Gateman, IN before <strong>8:40am</strong> is treated as an early call and UT is given.</li>
-      <li>UT = 9:00am minus actual IN time.</li>
-      <li>Example: 7:30am IN = 1 hour 30 minutes UT.</li>
-      <li>8:40am or later = no UT.</li>
-      <li>A person merely arriving early at or after 8:40am does not receive UT.</li>
-      <li>Sunday and holiday duty never receives UT.</li>
-      <li><strong>Gautam special rule:</strong> official duty start is 7:30am. Arrival before 7:30am is voluntary early arrival and gives no UT. From 7:30am up to 9:00am, UT is calculated against 9:00am.</li>
-    </ul>
-
-    <h4>6. Short Leave (SL)</h4>
-    <ul>
-      <li>SL is calculated from actual IN time against employee's applicable normal start time.</li>
-      <li>For a normal 9:00am start, IN at 9:20am gives 20 minutes SL.</li>
-      <li>For Gautam, the official start is 7:30am for the special duty arrangement, so early arrival before 7:30am does not create UT and arrival after 7:30am is treated according to applicable SL/attendance rules.</li>
-      <li>Sunday and holiday duty does not receive SL.</li>
-      <li>SL can be manually adjusted in Admin for exceptional situations, such as approved short leave during the day.</li>
-    </ul>
-
-    <h4>7. Varinder Pal - Split Shift</h4>
-    <ul>
-      <li>Evening duty: approximately 6:00pm to 1:00am.</li>
-      <li>Morning duty: approximately 6:00am to 7:00am.</li>
-      <li>Normal total duty is 8 hours.</li>
-      <li>Sleep period from approximately 1:00am to 6:00am is not counted as duty.</li>
-      <li>No break deduction.</li>
-      <li>Time is rounded to 30-minute intervals.</li>
-      <li>Both periods are stored in the background; normal register display can show only final OUT time.</li>
-      <li>Example: 6:00pm to 1:00am + 6:00am to 7:00am = 8 hours, 0 OT.</li>
-      <li>Example: 6:00pm to 1:00am + 6:00am to 8:00am = 9 hours, 1 hour OT.</li>
-    </ul>
-
-    <h4>8. Attendance Status</h4>
-    <ul>
-      <li><strong>Staff:</strong> Present, First Half Leave, Second Half Leave, Full Day Leave.</li>
-      <li><strong>Other employees:</strong> Present, Absent, Leave, Half Day, Holiday, Sunday.</li>
-      <li>Sunday and entered holidays are identified automatically.</li>
-    </ul>
-
-    <h4>9. Staff Auto-Suggestion</h4>
-    <ul>
-      <li>IN by 9:30am and OUT by 1:15pm → Second Half Leave.</li>
-      <li>IN from 1:45pm and OUT from 5:15pm → First Half Leave.</li>
-      <li>IN by 9:30am and OUT from 5:15pm → Present.</li>
-      <li>Other combinations require manual attendance selection.</li>
-    </ul>
-
-    <h4>10. Daily Register and Admin Editing</h4>
-    <ul>
-      <li>Gateman enters timings from physical register.</li>
-      <li>Previous entries are not displayed to Gateman.</li>
-      <li>Admin can review and edit daily records.</li>
-      <li>Admin uses one <strong>Save Changes</strong> button to save changes across dates and people.</li>
-      <li>Blank IN/OUT clears an existing daily timing record for that employee/date.</li>
-      <li>Non-split employees cannot save an OUT time earlier than IN.</li>
-      <li>Date and employee identify each daily record.</li>
-      <li>UT, SL and OT fields can be manually adjusted for exceptional situations. Manual values are saved as overrides.</li>
-      <li>Attendance Register changes remain as drafts until Save Changes is pressed.</li>
-    </ul>
-
-    <h4>11. Offline / Mobile Sync</h4>
-    <ul>
-      <li>Gateman app can save entries locally when internet is unavailable.</li>
-      <li>Pending entries are automatically uploaded when internet becomes available.</li>
-      <li>The app retries pending uploads automatically.</li>
-      <li>A duplicate employee/date conflict is not silently discarded; it remains pending for review.</li>
-      <li>Do not clear browser data or app storage while entries are pending.</li>
-      <li><strong>Synced</strong> means pending local entries have been uploaded successfully.</li>
-    </ul>
-
-    <h4>12. Monthly Summary</h4>
-    <ul>
-      <li>Monthly Summary simply counts the Attendance Register.</li>
-      <li>It shows all active employees.</li>
-      <li>Columns: Present, Half Day, Leave, Absent, Sunday, Holiday.</li>
-      <li>It does not show Worked Hours or OT.</li>
-      <li>For an incomplete current month, attendance is reported only up to latest date for which attendance/record data has been entered.</li>
-      <li>Future dates are not treated as Absent.</li>
-      <li>There is no overall total of all employees; totals are person-wise where applicable.</li>
-    </ul>
-
-    <h4>13. OT, UT and SL</h4>
-    <ul>
-      <li>OT, UT and SL are shown directly in the Attendance Register for each date.</li>
-      <li>It is restricted to OT-eligible employees: Driver and Gateman.</li>
-      <li>The Attendance Register shows each entered date for each employee.</li>
-      <li>Each employee has Date, IN, UT, OUT, SL, OT and Attendance.</li>
-      <li>IN 2 and OUT 2 are used internally for split-shift employees such as Varinder Pal.</li>
-      <li>Sunday/holiday OT is full elapsed duty time with no break deduction.</li>
-      <li>Regular Driver/Gateman OT uses 5:45pm as normal OUT, with up to 15 minutes ignored: 6:00pm = 0 OT and 6:01pm = 16 minutes OT.</li>
-      <li>Blank dates remain blank.</li>
-      <li>Each employee has a separate subtotal for OT, UT and SL. There is no combined total of all people.</li>
-      <li>Employee selection can include or exclude individual eligible employees.</li>
-      
-      
-    </ul>
-
-    <h4>14. One Attendance Rule</h4>
-    <ul>
-      <li>The Attendance Register is the main record. Timings are used to fill Attendance automatically, while an explicitly selected leave status takes priority.</li>
-      <li>Monthly Summary uses the same Attendance status from the Attendance Register, so it cannot produce a different count.</li>
-    </ul>
-
-    <h4>15. Admin Areas</h4>
-    <ul>
-      <li><strong>Attendance:</strong> Attendance Register is used to review and edit daily timings and attendance. Monthly Summary gives month-wise attendance totals.</li>
-      
-      <li><strong>Employees:</strong> maintain employee list and employee-specific rules.</li>
-      <li><strong>Holidays:</strong> maintain holiday dates.</li>
-      <li><strong>Settings:</strong> maintain category rules.</li>
-    </ul>
-
-    <h4>16. Employee-Specific Rules Currently Configured</h4>
-    <ul>
-      <li><strong>Gautam:</strong> Gateman; 525-minute normal target; 7:30am official duty start for UT/SL handling.</li>
-      <li><strong>Varinder Pal:</strong> Gateman; 480-minute normal duty; 30-minute rounding; split shift.</li>
-      <li><strong>Barkha:</strong> Gateman; 495-minute normal duty; 15-minute break.</li>
-      <li><strong>Umesh:</strong> Gardener; 520-minute normal duty; 40-minute break.</li>
-      <li><strong>Staff:</strong> 525-minute normal duty; 45-minute break.</li>
-      <li><strong>Driver:</strong> 525-minute normal duty; 45-minute break.</li>
-    </ul>
-
-    <p><strong>Reference rule:</strong> If any attendance, UT, SL or OT calculation appears unusual, first check this reference and then check the employee/category rule in Admin Settings.</p>
-    <button id="closeReadmeBtn" class="secondary">Close</button>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<title>FCS Attendance</title>
+</head>
+<body>
+<main class="app">
+<header class="topbar">
+  <div><h1>FCS Attendance</h1><p>Daily register entry</p></div>
+  <a class="ghost" href="./admin.html">Admin</a>
+</header>
+<section class="card gate-card">
+  <div class="syncbar"><span id="syncStatus">Ready</span><span id="pendingCount"></span></div>
+  <label>Date</label><input id="workDate" type="date">
+  <label>Employee</label><select id="employee"></select>
+  <div class="timegrid">
+    <div><label>IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="5" placeholder="9:00" autocomplete="off"></div>
+    <div><label>OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="5" placeholder="5:45" autocomplete="off"></div>
   </div>
-</div></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20260926-29"></script></body></html>
+  <div id="splitFields" class="timegrid hidden">
+    <div><label>IN 2</label><input id="inTime2" type="text" inputmode="numeric" maxlength="5" placeholder="6:00" autocomplete="off"></div>
+    <div><label>OUT 2</label><input id="outTime2" type="text" inputmode="numeric" maxlength="5" placeholder="7:00" autocomplete="off"></div>
+  </div>
+  <button id="saveBtn" class="primary">Save</button>
+  <p id="message" class="message"></p>
+</section>
+<p class="smallnote">Enter timings from the physical register. Previous entries are not displayed here.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js?v=20260926-30"></script>
+</body>
+</html>
