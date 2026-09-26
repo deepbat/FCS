@@ -565,6 +565,10 @@ async function exportAttendanceReport(){
   }catch(e){alert(e.message||'Unable to export attendance report.')}
 }
 
+function minutesFromHHMM(v){
+  const m=String(v||'').match(/^(\d{2}):(\d{2})/);
+  return m?Number(m[1])*60+Number(m[2]):null;
+}
 function normalStartMinutesForEmployee(emp){
   if(emp?.name==='Gautam')return 7*60+30;
   if(emp?.split_shift)return 18*60;
@@ -575,20 +579,6 @@ function normalStartMinutesForEmployee(emp){
   }
   if(emp?.category==='Gardener')return 8*60+30;
   return 9*60;
-}
-function slMinutesForRecord(record,emp,holidaySet){
-  if(!record||!emp)return 0;
-  if(new Date(record.work_date+'T00:00:00').getDay()===0||holidaySet.has(record.work_date))return 0;
-  const inMin=minutesFromHHMM(record.in_time);
-  const start=normalStartMinutesForEmployee(emp);
-  return inMin!=null&&inMin>start?inMin-start:0;
-}
-function signedMinutesText(mins){
-  const n=Number(mins)||0;
-  if(n===0)return '0h 00m';
-  const sign=n<0?'-':'';
-  const a=Math.abs(n);
-  return sign+Math.floor(a/60)+'h '+String(a%60).padStart(2,'0')+'m';
 }
 function dailyTimeAdjustments(emp,inTime,date,isHoliday){
   if(!emp||!inTime||isHoliday||new Date(date+'T00:00:00').getDay()===0)return {ut:0,sl:0};
