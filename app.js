@@ -294,10 +294,17 @@ function calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday){
   const a=timeMinutes(ni),b=timeMinutes(no);
   if(a===null||b===null)return {worked:null,ot:null};
   if(!emp.split_shift&&b<a)return {worked:null,ot:null};
-  let total=b-a+(b<a?1440:0);
+  let total;
   if(emp.split_shift){
-    const c=timeMinutes(ni2),d=timeMinutes(no2);
-    if(c!==null&&d!==null)total+=d-c+(d<c?1440:0);
+    const firstOut=timeMinutes(no2?'01:00':(no2||'01:00'));
+    const secondIn=timeMinutes(ni2||'06:00');
+    const secondOut=timeMinutes(no2||no);
+    if(firstOut===null||secondIn===null||secondOut===null)return {worked:null,ot:null};
+    const first=a<=firstOut?firstOut-a:firstOut+1440-a;
+    const second=secondOut>=secondIn?secondOut-secondIn:secondOut+1440-secondIn;
+    total=first+second;
+  }else{
+    total=b-a+(b<a?1440:0);
   }
   const er=effectiveRule(emp);
   const rounded=er.round_minutes>0?Math.round(total/er.round_minutes)*er.round_minutes:total;
@@ -332,7 +339,7 @@ function refreshLiveTotals(){
     const ni2=emp.split_shift?((bg.in_time_2||'').slice(0,5)):'';
     const no2=emp.split_shift?((no||'').slice(0,5)):'';
     const live=emp.split_shift
-      ?calcLiveMinutes(emp,ni,(bg.out_time||'').slice(0,5),ni2,no2,date,isHoliday)
+      ?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday)
       :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
     const workedCell=row.children[4],otCell=row.children[5];
     workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
