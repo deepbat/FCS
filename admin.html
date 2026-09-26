@@ -1,41 +1,24 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#111827">
-<title>FCS Attendance - Admin Login</title>
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;color:#111827}
-main{max-width:520px;margin:60px auto;padding:16px}.card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
-h1{margin:0 0 6px;font-size:24px}p{color:#6b7280}label{display:block;font-weight:600;font-size:14px;margin:16px 0 6px}
-input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:9px;font:inherit}
-button{width:100%;padding:12px;border:0;border-radius:9px;font:inherit;cursor:pointer;margin-top:18px;background:#111827;color:#fff}
-.secondary{background:#e5e7eb;color:#111827}.message{min-height:22px;color:#166534}.error{color:#b91c1c}
-</style>
-</head>
-<body>
-<main><div class="card">
-<h1>FCS Attendance</h1><p>Admin Login</p>
-<label>Email</label><input id="email" type="email" autocomplete="username">
-<label>Password</label><input id="password" type="password" autocomplete="current-password">
-<button id="login">Login</button>
-<button class="secondary" id="back">Back</button>
-<p id="message" class="message"></p>
-</div></main>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<title>FCS Attendance - Admin</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font:14px Arial,Helvetica,sans-serif}.app{max-width:1200px;margin:auto;padding:14px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}h1{font-size:22px;margin:0 0 3px}h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:0 0 10px}
+.muted{color:#667085}.card{background:#fff;border:1px solid #d5dae0;border-radius:8px;padding:14px;margin-bottom:12px}
+button,a{font:inherit}.btn{border:1px solid #c7cdd4;background:#eef1f4;color:#111827;padding:8px 11px;border-radius:5px;cursor:pointer}.primary{background:#111827;color:#fff;border-color:#111827}
+.savebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.savebar .primary{padding:10px 15px}.saveState{color:#52606d}.tabs,.modes{display:flex;gap:0;border-bottom:1px solid #c7cdd4;margin-bottom:10px}.tabs button,.modes button{border-radius:5px 5px 0 0;border:1px solid #c7cdd4;border-bottom:0;margin-right:3px}.active{background:#fff!important;font-weight:700}
+.toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#f8fafc;border:1px solid #d5dae0;padding:8px;margin-bottom:0}.toolbar input,.toolbar select{padding:8px;border:1px solid #c7cdd4;border-radius:5px}.personTabs{display:flex;gap:4px;overflow:auto;flex:1}.personTab{white-space:nowrap}
+.tablewrap{overflow:auto;background:#fff;border:1px solid #d5dae0}table{border-collapse:collapse;width:100%;min-width:800px}th,td{border-right:1px solid #d9dee4;border-bottom:1px solid #d9dee4;padding:6px 7px;white-space:nowrap;text-align:center}th{background:#e9edf2}td:first-child,th:first-child{text-align:left}
+td input,td select{width:100%;min-width:72px;border:1px solid transparent;background:transparent;padding:5px;text-align:center}td input:focus,td select:focus{border-color:#7aa7e8;background:#fff;outline:none}
+.summary{font-weight:700;background:#fff;padding:8px;border-left:1px solid #d5dae0;border-right:1px solid #d5dae0}.total td{font-weight:700;background:#eef1f4}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.grid input,.grid select{padding:9px;border:1px solid #c7cdd4;border-radius:5px}.grid button{margin-top:0}
+.hidden{display:none!important}.message{min-height:20px}.error{color:#b42318}.ok{color:#167047}
+.login{max-width:430px;margin:70px auto}.login input{width:100%;padding:11px;border:1px solid #c7cdd4;border-radius:5px;margin-top:5px}.login button{width:100%;margin-top:12px}
+.readme{line-height:1.5}.readme li{margin:5px 0}
+@media(max-width:700px){.app{padding:9px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.toolbar{flex-wrap:nowrap;overflow:auto}.personTabs{order:5;flex-basis:100%}}
+@media print{body{background:#fff}.noPrint{display:none!important}.app{max-width:none;padding:0}.tablewrap{overflow:visible}table{min-width:0;font-size:9px}th,td{padding:3px}.printTitle{display:block!important}}
+</style></head>
+<body><main id="root"></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-const db=supabase.createClient('https://raesuqidwkcpylvqiftf.supabase.co','sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF');
-const message=document.getElementById('message');
-document.getElementById('back').onclick=()=>location.href='./';
-document.getElementById('login').onclick=async()=>{
-  const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;
-  if(!email||!password){message.textContent='Enter email and password.';message.className='message error';return}
-  const btn=document.getElementById('login');btn.disabled=true;btn.textContent='Logging in...';
-  const {error}=await db.auth.signInWithPassword({email,password});
-  if(error){message.textContent=error.message;message.className='message error';btn.disabled=false;btn.textContent='Login';return}
-  location.href='./?admin=1';
-};
-</script>
-</body>
-</html>
+<script src="./admin.js?v=20260926-30"></script>
+</body></html>
