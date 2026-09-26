@@ -1019,6 +1019,7 @@ $('refreshRecords').onclick=()=>{captureCurrentRecordDrafts();loadRecords()};
 $('recordDate').onchange=()=>{captureCurrentRecordDrafts();loadRecords()};
 $('prevRecordDate').onclick=()=>moveRecordDate(-1);
 $('nextRecordDate').onclick=()=>moveRecordDate(1);$('printRecord').onclick=()=>window.print();$('exportRecords').onclick=exportRecords;
+$('readmeBtn').onclick=()=>{$('readmePanel').classList.toggle('hidden')};$('closeReadmeBtn').onclick=()=>{$('readmePanel').classList.add('hidden')};
 $('addEmployee').onclick=addEmployee;$('addHoliday').onclick=addHoliday;$('saveAllBtn').onclick=saveAllChanges;$('generateReport').onclick=generateReport;$('printReport').onclick=()=>printReportTab('reports');$('exportReport').onclick=exportReport;$('reportMonth').onchange=loadReportOptions;$('attendanceMonth').value=monthNow();$('generateAttendanceReport').onclick=generateAttendanceReport;$('printAttendanceReport').onclick=()=>printReportTab('attendanceReport');$('exportAttendanceReport').onclick=exportAttendanceReport;setupTabs();setupPersonRegister();
 
 (async()=>{
