@@ -193,6 +193,7 @@ async function loadPersonRegister(){
   document.querySelectorAll('#personTabs .personTab').forEach(x=>x.classList.toggle('active',x.dataset.id===selected.id));
   let totalUT=0,totalSL=0,totalOT=0;
   window.__personSecondShift=new Map();
+  window.__personHolidaySet=holidaySet;
   let html='<tr><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(let day=1;day<=days;day++){
     const date=start.slice(0,8)+String(day).padStart(2,'0');
@@ -221,8 +222,8 @@ async function loadPersonRegister(){
   $('personRegisterTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance').forEach(el=>{
-    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);refreshPersonLiveTotals()});
-    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);refreshPersonLiveTotals()});
+    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
+    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
   });
 }
 
@@ -238,7 +239,7 @@ function refreshPersonLiveTotals(){
     const outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
     const bg=window.__personSecondShift?.get(emp.id+'|'+date)||{};
     const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,false);
-    const adj=dailyTimeAdjustments(emp,inTime,date,false);
+    const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false);
     const u=emp.name==='Gautam'?0:adj.ut,s=adj.sl,o=live?.ot??0;
     row.querySelector('.personUT').textContent=fmtMin(u);
     row.querySelector('.personSL').textContent=fmtMin(s);
