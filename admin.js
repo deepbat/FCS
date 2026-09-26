@@ -90,7 +90,7 @@ return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="mo
 }
 function datesForMonth(){
  const [start,end]=range(month);const today=new Date().toISOString().slice(0,10);const currentMonth=new Date().toISOString().slice(0,7);
- let cutoff=month===currentMonth?today:end;
+ let cutoff=end;
  const out=[];let d=new Date(start+'T12:00:00'),z=new Date(cutoff+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
 }
 function renderRegister(){
