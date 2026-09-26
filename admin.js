@@ -86,7 +86,7 @@ $('summaryMode').onclick=()=>{currentMode='summary';$('summaryMode').classList.a
 renderRegister();
 }
 function monthToolbar(){
-return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><div class="personTabs">'+employees.filter(e=>e.active).map((e,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(e.name)+'</button>').join('')+'</div><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel</button></div>'
+return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><div class="personTabs">'+employees.filter(e=>e.active).map((e,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(e.name)+'</button>').join('')+'</div><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
 }
 function datesForMonth(){
  const [start,end]=range(month);let cutoff=month===new Date().toISOString().slice(0,7)?new Date().toISOString().slice(0,10):end;
@@ -105,7 +105,7 @@ function renderRegister(){
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
  const rows=datesForMonth(),isSplit=e.split_shift;
  let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th></tr></thead><tbody>';
- rows.forEach(date=>{const d=getDraft(date,e.id);h+='<tr data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="out_time" value="'+esc(d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'});
+ rows.forEach(date=>{const d=getDraft(date,e.id);const rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="out_time" value="'+esc(d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'});
  h+='</tbody>';$('regTable').innerHTML=h;
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));
  updateRegSummary(e,rows);
@@ -128,8 +128,8 @@ function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySele
 function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='OT: '+fmtMin(ot)+'   UT: '+fmtMin(ut)+'   SL: '+fmtMin(sl)}
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
- let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
- active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const a=attendance.find(x=>x.work_date===d&&x.employee_id===e.id),r=records.find(x=>x.work_date===d&&x.employee_id===e.id),s=statusFor(e,d,r,a);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day')counts['Half Day']++;else if(s==='Full Day Leave')counts.Leave++;else if(counts[s]!=null)counts[s]++});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
+ let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
+ active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const a=attendance.find(x=>x.work_date===d&&x.employee_id===e.id),r=records.find(x=>x.work_date===d&&x.employee_id===e.id),s=statusFor(e,d,r,a);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
  h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=e=>{month=e.target.value;renderSummary()};$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
@@ -171,8 +171,16 @@ async function saveAll(){
  }catch(err){s.textContent='Save error: '+err.message;s.className='saveState error'}
 }
 function exportEmployee(){
- const e=employees.filter(x=>x.active)[activeEmployee],rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
- const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,e.name.slice(0,31));XLSX.writeFile(wb,'Attendance_'+e.name.replace(/\s+/g,'_')+'_'+month+'.xlsx');
+ const wb=XLSX.utils.book_new(),used=new Set();
+ employees.filter(e=>e.active).forEach(e=>{
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
+   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Attendance']});
+   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:20}];
+   let name=(e.name||'Employee').replace(/[\\/?*\[\]:]/g,' ').slice(0,31)||'Employee',base=name,n=2;
+   while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
+   XLSX.utils.book_append_sheet(wb,ws,name);
+ });
+ XLSX.writeFile(wb,'FCS_Attendance_'+month+'.xlsx');
 }
 (async()=>{
  const {data:{session}}=await db.auth.getSession();
