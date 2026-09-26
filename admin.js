@@ -5,7 +5,7 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
-let drafts=new Map(), activeEmployee=0, currentTab='attendance', currentMode='register', month=new Date().toISOString().slice(0,7);
+let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=new Date().toISOString().slice(0,7), hasUnsaved=false;
 
 const fmtDate=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
 const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return Math.floor(n/60)+'h '+String(n%60).padStart(2,'0')+'m'};
@@ -30,11 +30,11 @@ function calc(e,rec,date){
     if(special){ut=a<450?Math.floor((540-a)/30)*30:Math.max(0,540-a);sl=Math.max(0,a-450)}
     else sl=Math.max(0,a-(mins(r.normal_start)||540));
   }
-  const otEligible=e.category==='Driver'||e.category==='Gateman';
+  const otEligible=!!r.ot_eligible;
   let ot=0;
   if(otEligible){
     if(isSunday(date)||hol(date))ot=elapsed;
-    else if(elapsed>((e.normal_work_minutes||0)+(r.ot_threshold_minutes||15)))ot=elapsed-(e.normal_work_minutes||0);
+    else if(elapsed>((r.normal_work_minutes||e.normal_work_minutes||0)+(r.ot_threshold_minutes||0)))ot=elapsed-(r.normal_work_minutes||e.normal_work_minutes||0);
   }
   const worked=e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0));
   return {ut,sl,ot,worked,elapsed};
@@ -59,7 +59,8 @@ function getDraft(date,id){
   drafts.set(key,d);return d;
 }
 function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
-function markUnsaved(){const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
+function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
+window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
 async function loadData(){
   const [er,rr,hr,dr,ar]=await Promise.all([
     db.from('employees').select('*').order('employee_code'),
@@ -95,7 +96,7 @@ function datesForMonth(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap"><table id="regTable"></table></div><div id="grandTotal" class="summary"></div>';
+ $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div>';
  $('month').onchange=e=>{month=e.target.value;activeEmployee=0;renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();
@@ -104,12 +105,12 @@ function renderRegister(){
  const rows=datesForMonth(),isSplit=e.split_shift;
  let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th></tr></thead><tbody>';
  rows.forEach(date=>{const d=getDraft(date,e.id);const rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="out_time" value="'+esc(d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'});
- h+='</tbody>';$('regTable').innerHTML=h;
- document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));
+ h+='</tbody>';$('regTable').innerHTML=h; $('regCards').innerHTML=rows.map(date=>{const d=getDraft(date,e.id);return '<div class="regCard" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="out_time" value="'+esc(d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'}).join('');
+ document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
 function editCell(tr,e){
- const date=tr.dataset.date,d=getDraft(date,e.id);
+ const date=tr.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));
  tr.querySelectorAll('[data-f]').forEach(el=>{
    const f=el.dataset.f,v=el.value;
    if(['in_time','out_time','in_time_2','out_time_2'].includes(f))d[f]=normalize(v);
@@ -126,18 +127,19 @@ function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySele
 function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl)}
 function totalsForAll(){let ot=0,ut=0,sl=0;const rows=datesForMonth();employees.filter(e=>e.active).forEach(e=>rows.forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0}));return {ot,ut,sl}}
 function updateGrandTotal(){const x=$('grandTotal');if(!x)return;const t=totalsForAll();x.textContent='Grand Total (All People):  OT '+fmtMin(t.ot)+'   UT '+fmtMin(t.ut)+'   SL '+fmtMin(t.sl)}
+function editCard(card,e){const date=card.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));card.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f,v=el.value;if(['in_time','out_time','in_time_2','out_time_2'].includes(f))d[f]=normalize(v);else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}else d[f]=v});const c=calc({...e},{...d},date);if(d.ut_override==null)d.ut=c.ut;if(d.sl_override==null)d.sl=c.sl;if(d.ot_override==null)d.ot=c.ot;markUnsaved();renderRegister();}
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
  let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
- active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const a=attendance.find(x=>x.work_date===d&&x.employee_id===e.id),r=records.find(x=>x.work_date===d&&x.employee_id===e.id),s=statusFor(e,d,r,a);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
+ active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
  h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=e=>{month=e.target.value;renderSummary()};$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
  $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
  $('addEmp').onclick=async()=>{const code=$('newCode').value.trim(),name=$('newName').value.trim(),category=$('newCat').value;if(!code||!name)return;$('addEmp').disabled=true;const r=ruleFor({category});const {error}=await db.from('employees').insert({employee_code:code,name,category,normal_work_minutes:r.normal_work_minutes||525,break_minutes:r.break_minutes||0,active:true});if(error){$('empMsg').textContent=error.message;$('empMsg').className='message error'}else{await loadData();renderEmployees();renderRegister()}};
- document.querySelectorAll('[data-active]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.active);e.active=x.checked;markUnsaved()});
- document.querySelectorAll('[data-normal]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.normal);e.normal_work_minutes=+x.value||0;markUnsaved()});
- document.querySelectorAll('[data-break]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.break);e.break_minutes=+x.value||0;markUnsaved()});
+ document.querySelectorAll('[data-active]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.active);e.active=x.checked;dirtyEmployees.add(e.id);markUnsaved()});
+ document.querySelectorAll('[data-normal]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.normal);e.normal_work_minutes=+x.value||0;dirtyEmployees.add(e.id);markUnsaved()});
+ document.querySelectorAll('[data-break]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.break);e.break_minutes=+x.value||0;dirtyEmployees.add(e.id);markUnsaved()});
 }
 function renderHolidays(){
  $('holidaysSection').innerHTML='<div class="card"><h3>Add Holiday</h3><div class="grid"><input id="hd" type="date"><input id="hn" placeholder="Holiday name"><span></span><button id="addHol" class="btn primary">Add</button></div></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Name</th><th>Action</th></tr></thead><tbody>'+holidays.map(h=>'<tr><td>'+fmtDate(h.holiday_date)+'</td><td>'+esc(h.name)+'</td><td><button class="btn" data-delhol="'+h.id+'">Delete</button></td></tr>').join('')+'</tbody></table></div>';
@@ -146,29 +148,22 @@ function renderHolidays(){
 }
 function renderSettings(){
  $('settingsSection').innerHTML='<div class="card"><h3>Category Rules</h3><div class="tablewrap"><table><thead><tr><th>Category</th><th>Start</th><th>End</th><th>Normal Minutes</th><th>Break</th><th>OT</th><th>Threshold</th></tr></thead><tbody>'+rules.map(r=>'<tr><td>'+esc(r.category)+'</td><td><input data-r="start" data-cat="'+esc(r.category)+'" value="'+time(r.normal_start)+'"></td><td><input data-r="end" data-cat="'+esc(r.category)+'" value="'+time(r.normal_end)+'"></td><td><input data-r="normal" data-cat="'+esc(r.category)+'" value="'+(r.normal_work_minutes||0)+'"></td><td><input data-r="break" data-cat="'+esc(r.category)+'" value="'+(r.break_minutes||0)+'"></td><td><input type="checkbox" data-r="ot" data-cat="'+esc(r.category)+'" '+(r.ot_eligible?'checked':'')+'></td><td><input data-r="threshold" data-cat="'+esc(r.category)+'" value="'+(r.ot_threshold_minutes||15)+'"></td></tr>').join('')+'</tbody></table></div></div>';
- document.querySelectorAll('[data-r]').forEach(x=>x.onchange=()=>{const r=ruleFor({category:x.dataset.cat}),f=x.dataset.r;r[f==='start'?'normal_start':f==='end'?'normal_end':f==='normal'?'normal_work_minutes':f==='break'?'break_minutes':f==='ot'?'ot_eligible':'ot_threshold_minutes']=x.type==='checkbox'?x.checked:x.value;markUnsaved()});
+ document.querySelectorAll('[data-r]').forEach(x=>x.onchange=()=>{const r=ruleFor({category:x.dataset.cat}),f=x.dataset.r;r[f==='start'?'normal_start':f==='end'?'normal_end':f==='normal'?'normal_work_minutes':f==='break'?'break_minutes':f==='ot'?'ot_eligible':'ot_threshold_minutes']=x.type==='checkbox'?x.checked:x.value;dirtyRules.add(r.category);markUnsaved()});
 }
 async function saveAll(){
  const s=$('saveState');s.textContent='Saving...';s.className='saveState';
  try{
-  for(const e of employees)await db.from('employees').update({active:e.active,normal_work_minutes:e.normal_work_minutes,break_minutes:e.break_minutes}).eq('id',e.id);
-  for(const r of rules)await db.from('category_rules').update({normal_start:r.normal_start,normal_end:r.normal_end,normal_work_minutes:+r.normal_work_minutes||0,break_minutes:+r.break_minutes||0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||15}).eq('category',r.category);
-  for(const d of drafts.values()){
-    const e=emp(d.id);if(!e)continue;
-    const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2);
-    const existing=d.record;
-    if(!it&&!ot){
-      if(existing)await db.from('daily_records').delete().eq('id',existing.id);
-      await db.from('attendance').delete().eq('work_date',d.date).eq('employee_id',d.id);
-      continue;
-    }
-    const c=calc(e,{...d,in_time:it,out_time:ot,in_time_2:it2,out_time_2:ot2},d.date);
-    const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:ot,in_time_2:e.split_shift?it2:null,out_time_2:e.split_shift?ot2:null,break_minutes:e.break_minutes||0,normal_work_minutes:e.normal_work_minutes||0,ot_eligible:e.category==='Driver'||e.category==='Gateman',ot_threshold_minutes:15,round_minutes:e.round_minutes||0,full_day_ot:isSunday(d.date)||!!hol(d.date),total_elapsed_minutes:c.elapsed,worked_minutes:c.worked,ut_minutes:d.ut_override!=null?d.ut_override:c.ut,sl_minutes:d.sl_override!=null?d.sl_override:c.sl,ot_minutes:d.ot_override!=null?d.ot_override:c.ot,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
-    if(existing)await db.from('daily_records').update(p).eq('id',existing.id);else await db.from('daily_records').insert({...p,client_id:crypto.randomUUID()});
-    await db.from('attendance').upsert({work_date:d.date,employee_id:d.id,status:d.status||statusFor(e,d.date,d,null),updated_at:new Date().toISOString()},{onConflict:'work_date,employee_id'});
+  for(const id of dirtyEmployees){const e=emp(id);if(!e)continue;const {error}=await db.from('employees').update({active:e.active,normal_work_minutes:e.normal_work_minutes,break_minutes:e.break_minutes}).eq('id',id);if(error)throw new Error('Employee '+e.name+': '+error.message)}
+  for(const category of dirtyRules){const r=ruleFor({category});const {error}=await db.from('category_rules').update({normal_start:r.normal_start,normal_end:r.normal_end,normal_work_minutes:+r.normal_work_minutes||0,break_minutes:+r.break_minutes||0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0}).eq('category',category);if(error)throw new Error('Rule '+category+': '+error.message)}
+  for(const key of dirtyDrafts){const d=drafts.get(key),e=emp(d.id);if(!e)continue;const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2),existing=d.record;
+   if(!it&&!ot){if(existing){const {error}=await db.from('daily_records').delete().eq('id',existing.id);if(error)throw error}const {error}=await db.from('attendance').delete().eq('work_date',d.date).eq('employee_id',d.id);if(error)throw error;continue}
+   const c=calc(e,{...d,in_time:it,out_time:ot,in_time_2:it2,out_time_2:ot2},d.date),r=ruleFor(e);
+   const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:ot,in_time_2:e.split_shift?it2:null,out_time_2:e.split_shift?ot2:null,break_minutes:r.break_minutes??e.break_minutes??0,normal_work_minutes:r.normal_work_minutes??e.normal_work_minutes??0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0,round_minutes:e.round_minutes||0,full_day_ot:isSunday(d.date)||!!hol(d.date),total_elapsed_minutes:c.elapsed,worked_minutes:c.worked,ut_minutes:d.ut_override!=null?d.ut_override:c.ut,sl_minutes:d.sl_override!=null?d.sl_override:c.sl,ot_minutes:d.ot_override!=null?d.ot_override:c.ot,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
+   if(existing){const {error}=await db.from('daily_records').update(p).eq('id',existing.id);if(error)throw error}else{const {error}=await db.from('daily_records').insert({...p,client_id:crypto.randomUUID()});if(error)throw error}
+   const {error}=await db.from('attendance').upsert({work_date:d.date,employee_id:d.id,status:d.status||statusFor(e,d.date,d,null),updated_at:new Date().toISOString()},{onConflict:'work_date,employee_id'});if(error)throw error;
   }
-  drafts.clear();await loadData();s.textContent='All changes saved';s.className='saveState ok';renderRegister();
- }catch(err){s.textContent='Save error: '+err.message;s.className='saveState error'}
+  dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();s.textContent='All changes saved';s.className='saveState ok';renderRegister();if(currentTab==='summary')renderSummary();
+ }catch(err){s.textContent='Save failed: '+err.message;s.className='saveState error';markUnsaved()}
 }
 function exportEmployee(){
  const wb=XLSX.utils.book_new(),used=new Set();
