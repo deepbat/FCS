@@ -20,12 +20,16 @@ function normalizeTime(v){
 }
 function markRecordUnsaved(e){
   const row=e?.target?.closest?.('#recordsTable tr[data-employee-id]');
-  if(row)captureRecordRowDraft(row);
+  if(row){
+    row.dataset.dirty='1';
+    captureRecordRowDraft(row);
+  }
   setSaveStatus('unsaved');
   refreshLiveTotals();
 }
 
 function captureRecordRowDraft(row){
+  if(!row?.dataset?.dirty)return;
   const date=$('recordDate')?.value||today();
   const employeeId=row?.dataset?.employeeId;
   if(!employeeId)return;
@@ -254,7 +258,7 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
