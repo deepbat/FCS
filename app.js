@@ -112,14 +112,14 @@ function capturePersonRowDraft(row){
   const status=row.querySelector('.personAttendance')?.value||'';
   const bg=window.__personSecondShift?.get(employeeId+'|'+date)||{};
   const oldIn=row.dataset.origIn||'',oldOut=row.dataset.origOut||'',oldStatus=row.dataset.origStatus||'',oldFirst=row.dataset.origFirstOut||'',oldIn2=row.dataset.origIn2||'';
-  const readOverride=(selector,origDisplay)=>{
+  const readOverride=(selector,origDisplay,origOverride)=>{
     const raw=String(row.querySelector(selector)?.value??'').trim();
-    if(raw===origDisplay)return null;
+    if(raw===origDisplay)return origOverride===''?null:Number(origOverride);
     return raw===''?null:parseAdjustmentMinutes(raw);
   };
-  const utOverride=readOverride('.personUT',row.dataset.origUtDisplay||'');
-  const slOverride=readOverride('.personSL',row.dataset.origSlDisplay||'');
-  const otOverride=readOverride('.personOT',row.dataset.origOtDisplay||'');
+  const utOverride=readOverride('.personUT',row.dataset.origUtDisplay||'',row.dataset.origUtOverride||'');
+  const slOverride=readOverride('.personSL',row.dataset.origSlDisplay||'',row.dataset.origSlOverride||'');
+  const otOverride=readOverride('.personOT',row.dataset.origOtDisplay||'',row.dataset.origOtOverride||'');
   const adjChanged=String(row.querySelector('.personUT')?.value??'').trim()!==(row.dataset.origUtDisplay||'')||
     String(row.querySelector('.personSL')?.value??'').trim()!==(row.dataset.origSlDisplay||'')||
     String(row.querySelector('.personOT')?.value??'').trim()!==(row.dataset.origOtDisplay||'');
