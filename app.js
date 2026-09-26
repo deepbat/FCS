@@ -57,6 +57,25 @@ function captureCurrentRecordDrafts(){
 function draftFor(date,employeeId){
   return recordDrafts.get(date+'|'+employeeId)||null;
 }
+function usableDraft(date,emp,rec,attMap,holiday,dow){
+  const d=draftFor(date,emp.id);
+  if(!d)return null;
+  const dbIn=(rec?.in_time||'').slice(0,5);
+  const dbOut=(emp.split_shift?(rec?.out_time_2||''):(rec?.out_time||'')).slice(0,5);
+  const dbFirstOut=emp.split_shift?(rec?.out_time||'').slice(0,5):'';
+  const dbIn2=emp.split_shift?(rec?.in_time_2||'').slice(0,5):'';
+  const dbStatus=attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':''));
+  const draftStatus=d.status||'';
+  const same=(d.in_time||'')===dbIn &&
+    (d.out_time||'')===dbOut &&
+    (!emp.split_shift || ((d.first_out||'')===dbFirstOut && (d.in_time_2||'')===dbIn2)) &&
+    draftStatus===dbStatus;
+  if(same){
+    recordDrafts.delete(date+'|'+emp.id);
+    return null;
+  }
+  return d;
+}
 function legacySplitFor(emp,rec){
   if(!emp?.split_shift||!rec||rec.in_time_2||rec.out_time_2)return null;
   return {first_out:'01:00',in_time_2:'06:00',out_time_2:(rec.out_time||'').slice(0,5)};
@@ -227,8 +246,8 @@ async function loadRecords(){
   window.__recordHoliday=holiday;
   window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{out_time:r.out_time,in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
   for(const emp of list){
-    const d=draftFor(date,emp.id);
     const rec=recordMap.get(emp.id);
+    const d=usableDraft(date,emp,rec,attMap,holiday,dow);
     const legacy=legacySplitFor(emp,rec);
     if(d?.split){
       window.__recordSecondShift.set(emp.id,{out_time:d.first_out||legacy?.first_out||'',in_time_2:d.in_time_2||legacy?.in_time_2||'',out_time_2:d.out_time||legacy?.out_time_2||''});
@@ -243,7 +262,7 @@ async function loadRecords(){
   let html='<tr><th>Employee</th><th>Category</th><th>Date</th><th>In Time</th><th>UT</th><th>Out Time</th><th>SL</th><th>OT</th><th>Attendance</th></tr>';
   for(const emp of list){
     const rec=recordMap.get(emp.id);
-    const draft=draftFor(date,emp.id);
+    const draft=usableDraft(date,emp,rec,attMap,holiday,dow);
     let status=draft?draft.status:(attMap.get(emp.id)||(holiday?'Holiday':(dow===0?'Sunday':'')));
     const visibleIn=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const visibleOut=draft?draft.out_time:(emp.split_shift&&rec?.out_time_2?rec.out_time_2.slice(0,5):(rec?.out_time?.slice(0,5)||''));
