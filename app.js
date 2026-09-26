@@ -782,7 +782,7 @@ async function saveAllChanges(){
         recordDrafts.delete(key);
       }
     }
-    await Promise.all([loadPersonRegister(),loadReportOptions()]);
+    await loadPersonRegister();
     btn.textContent='Saved';setSaveStatus('saved');setTimeout(()=>btn.textContent='Save Changes',900);
   }catch(e){
     alert(e.message||'Unable to save changes.');
