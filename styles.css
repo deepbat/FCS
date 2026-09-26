@@ -301,3 +301,22 @@
 #recordsTable .adjustEdit{width:82px}
 
 .sundayRow td,.sundayCell{background:#f1f1f1!important}.holidayRow td,.holidayCell{background:#e8f1ff!important}.leaveRow td{background:#fff6d9!important}.personTotal td{background:#e9ecef!important;font-weight:600}.adminReadme{text-align:center;margin:24px 0 8px}.readmePanel{margin:8px 0}.readmePanel .card{max-width:900px}.readmePanel li{margin:7px 0}
+/* Current combined attendance report printing */
+@media print{
+  body[data-print-tab="attendanceReport"] #recordsTab{display:block!important}
+  body[data-print-tab="attendanceReport"] #monthlySummaryPane{display:block!important}
+  body[data-print-tab="attendanceReport"] #personRegisterPane{display:none!important}
+  body[data-print-tab="attendanceReport"] #attendanceReportTitle{display:block!important;text-align:center;font-size:14px;font-weight:700;margin:0 0 4px}
+  body[data-print-tab="attendanceReport"] #attendanceReportSummary{display:block!important;text-align:center;font-size:10px;font-weight:700;padding:2px 0 7px}
+  body[data-print-tab="attendanceReport"] #monthlySummaryPane .toolbar{display:none!important}
+  body[data-print-tab="attendanceReport"] #attendanceReportTable{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse}
+  body[data-print-tab="attendanceReport"] #attendanceReportTable th,body[data-print-tab="attendanceReport"] #attendanceReportTable td{border:1px solid #777!important;padding:4px!important;font-size:8px!important}
+  body[data-print-tab="attendanceReport"] #monthlySummaryPane .tablewrap{overflow:visible!important;border:1px solid #555}
+
+  body[data-print-tab="personRegister"] #recordsTab{display:block!important}
+  body[data-print-tab="personRegister"] #personRegisterPane{display:block!important}
+  body[data-print-tab="personRegister"] #monthlySummaryPane{display:none!important}
+  body[data-print-tab="personRegister"] #personRegisterPane .personToolbar{display:none!important}
+  body[data-print-tab="personRegister"] #personTitle,body[data-print-tab="personRegister"] #personSummary{display:block!important}
+  body[data-print-tab="personRegister"] #personRegisterTable{width:100%!important;min-width:0!important}
+}
