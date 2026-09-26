@@ -200,7 +200,8 @@ async function loadPersonRegister(){
     const rec=recordMap.get(date+'|'+emp.id);
     const draft=draftFor(date,emp.id);
     const explicitStatus=attMap.get(date+'|'+emp.id);
-    const status=draft?draft.status:personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date));
+    const autoStatus=personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date));
+    const status=draft?(draft.status||autoStatus):autoStatus;
     const inTime=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const outTime=draft?draft.out_time:(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''));
     const firstOut=draft?.first_out||(emp.split_shift?rec?.out_time?.slice(0,5)||'':'');
@@ -460,7 +461,8 @@ async function loadRecords(){
   for(const emp of list){
     const rec=recordMap.get(emp.id);
     const draft=usableDraft(date,emp,rec,attMap,holiday,dow);
-    let status=draft?draft.status:((holiday?'Holiday':(dow===0?'Sunday':attMap.get(emp.id)||'')));
+    const autoStatus=holiday?'Holiday':(dow===0?'Sunday':(attMap.get(emp.id)||''));
+    let status=draft?(draft.status||autoStatus):autoStatus;
     const visibleIn=draft?draft.in_time:(rec?.in_time?.slice(0,5)||'');
     const visibleOut=draft?draft.out_time:(emp.split_shift&&rec?.out_time_2?rec.out_time_2.slice(0,5):(rec?.out_time?.slice(0,5)||''));
     if(rec||draft){
