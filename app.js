@@ -57,6 +57,11 @@ function captureCurrentRecordDrafts(){
 function draftFor(date,employeeId){
   return recordDrafts.get(date+'|'+employeeId)||null;
 }
+function legacySplitFor(emp,rec){
+  if(!emp?.split_shift||!rec||rec.in_time_2||rec.out_time_2)return null;
+  return {first_out:'01:00',in_time_2:'06:00',out_time_2:(rec.out_time||'').slice(0,5)};
+}
+
 
 function normalizeTimeFields(){
   document.querySelectorAll('.timeEdit').forEach(el=>{
@@ -223,7 +228,13 @@ async function loadRecords(){
   window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{out_time:r.out_time,in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
   for(const emp of list){
     const d=draftFor(date,emp.id);
-    if(d?.split)window.__recordSecondShift.set(emp.id,{out_time:d.first_out,in_time_2:d.in_time_2,out_time_2:d.out_time});
+    const rec=recordMap.get(emp.id);
+    const legacy=legacySplitFor(emp,rec);
+    if(d?.split){
+      window.__recordSecondShift.set(emp.id,{out_time:d.first_out||legacy?.first_out||'',in_time_2:d.in_time_2||legacy?.in_time_2||'',out_time_2:d.out_time||legacy?.out_time_2||''});
+    }else if(legacy){
+      window.__recordSecondShift.set(emp.id,legacy);
+    }
   }
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
@@ -590,16 +601,18 @@ async function saveAllChanges(){
         const split=!!emp.split_shift;
         const ni=normalizeTime(d.in_time||'');
         const no=normalizeTime(d.out_time||'');
-        const ni2=split?normalizeTime(d.in_time_2||''):'';
+        const legacy=split?legacySplitFor(emp,old):null;
+        const ni2=split?normalizeTime(d.in_time_2||legacy?.in_time_2||''):'';
         const no2=split?no:'';
+        const firstOut=split?normalizeTime(d.first_out||legacy?.first_out||old?.out_time||'01:00'):'';
         if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+' on '+fmtDate(date)+'.');
         if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+' on '+fmtDate(date)+'.');
-        if(split&&((ni2&&!no2)||(!ni2&&no2)))throw new Error('Please enter both split-shift times for '+emp.name+' on '+fmtDate(date)+'.');
+        if(split&&(!firstOut||(!ni2&&!no2)||(!ni2&&no2)))throw new Error('Unable to determine split-shift times for '+emp.name+' on '+fmtDate(date)+'.');
         const er=effectiveRule(emp),old=idMap.get(emp.id);
         if(ni&&no){
           const payload={
             in_time:ni+':00',
-            out_time:split?((d.first_out||old?.out_time||'01:00').slice(0,5)+':00'):no+':00',
+            out_time:split?(firstOut.slice(0,5)+':00'):no+':00',
             in_time_2:split?(ni2?ni2+':00':null):null,
             out_time_2:split?(no2?no2+':00':null):null,
             break_minutes:er.break_minutes,
