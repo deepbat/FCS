@@ -230,9 +230,9 @@ function refreshPersonLiveTotals(){
   document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(row=>{
     const date=row.dataset.date,inTime=normalizeTime(row.querySelector('.personIn')?.value||''),outTime=normalizeTime(row.querySelector('.personOut')?.value||''),bg=window.__personSecondShift?.get(emp.id+'|'+date)||{};
     const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,window.__personHolidaySet?.has(date)||false);
-    const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false);
+    const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false),d=recordDrafts.get(date+'|'+emp.id);
     const u=parseAdjustmentMinutes(row.querySelector('.personUT')?.value),s=parseAdjustmentMinutes(row.querySelector('.personSL')?.value),o=parseAdjustmentMinutes(row.querySelector('.personOT')?.value);
-    const ru=u==null?adj.ut:u,rs=s==null?adj.sl:s,ro=o==null?(live?.ot??0):o;
+    const ru=d?(d.ut_override!=null?d.ut_override:adj.ut):u,rs=d?(d.sl_override!=null?d.sl_override:adj.sl):s,ro=d?(d.ot_override!=null?d.ot_override:(live?.ot??0)):o;
     row.querySelector('.personUT').value=fmtMin(ru);row.querySelector('.personSL').value=fmtMin(rs);row.querySelector('.personOT').value=fmtMin(ro);
     ut+=ru;sl+=rs;ot+=ro;
   });
