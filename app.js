@@ -83,6 +83,12 @@ function captureCurrentPersonDraft(){
   document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(capturePersonRowDraft);
 }
 
+function draftFor(date,employeeId){return recordDrafts.get(date+'|'+employeeId)||null;}
+function legacySplitFor(emp,rec){
+  if(!emp?.split_shift||!rec||rec.in_time_2||rec.out_time_2)return null;
+  return {first_out:'01:00',in_time_2:'06:00',out_time_2:(rec.out_time||'').slice(0,5)};
+}
+
 function personMonthRange(month){
   const [y,m]=String(month||monthNow()).split('-').map(Number);
   const start=y+'-'+String(m).padStart(2,'0')+'-01';
