@@ -30,23 +30,15 @@ function markRecordUnsaved(e){
 
 function captureRecordRowDraft(row){
   if(!row?.dataset?.dirty)return;
-  const date=$('recordDate')?.value||today();
-  const employeeId=row?.dataset?.employeeId;
-  if(!employeeId)return;
-  const emp=window.__recordEmployees?.find(x=>x.id===employeeId);
-  if(!emp)return;
+  const date=$('recordDate')?.value||today(),employeeId=row?.dataset?.employeeId;if(!employeeId)return;
+  const emp=window.__recordEmployees?.find(x=>x.id===employeeId);if(!emp)return;
   const bg=window.__recordSecondShift?.get(employeeId)||{};
-  const draft={
-    date,
-    employee_id:employeeId,
-    in_time:normalizeTime($('in-'+employeeId)?.value||''),
-    out_time:normalizeTime($('out-'+employeeId)?.value||''),
-    status:$('a-'+employeeId)?.value||'',
-    split:!!emp.split_shift,
-    first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',
-    in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',
-    dirty:true
-  };
+  const readAdj=(selector,display,override)=>{const raw=String(row.querySelector(selector)?.value??'').trim();return raw!==display?parseAdjustmentMinutes(raw):(override===''?null:Number(override))};
+  const draft={date,employee_id:employeeId,in_time:normalizeTime($('in-'+employeeId)?.value||''),out_time:normalizeTime($('out-'+employeeId)?.value||''),status:$('a-'+employeeId)?.value||'',split:!!emp.split_shift,
+    first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',
+    ut_override:readAdj('.dailyUT',row.dataset.origUtDisplay||'',row.dataset.origUtOverride||''),
+    sl_override:readAdj('.dailySL',row.dataset.origSlDisplay||'',row.dataset.origSlOverride||''),
+    ot_override:readAdj('.dailyOT',row.dataset.origOtDisplay||'',row.dataset.origOtOverride||''),dirty:true};
   recordDrafts.set(date+'|'+employeeId,draft);
 }
 
@@ -99,6 +91,9 @@ function setupTimeInput(id,defaultValue){
   el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});
 }
 const fmtMin=m=>{m=Math.max(0,Math.round(Number(m)||0));return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'};
+function parseAdjustmentMinutes(v){const s=String(v??'').trim().toLowerCase();if(!s)return null;if(/^\d+(?:\.\d+)?$/.test(s))return Math.max(0,Math.round(Number(s)));const hm=s.match(/^(\d+)\s*[:.]\s*(\d{1,2})$/);if(hm){const m=Number(hm[2]);return m<60?Number(hm[1])*60+m:null}const h=s.match(/^(\d+)\s*h(?:ours?)?\s*(?:(\d{1,2})\s*m(?:in(?:ute)?s?)?)?$/);if(h)return Number(h[1])*60+Number(h[2]||0);const m=s.match(/^(\d+)\s*m(?:in(?:ute)?s?)?$/);return m?Number(m[1]):null}
+function adjustmentInputValue(v){return v==null?'':fmtMin(v)}
+function effectiveAdjustment(rec,field,calculated){return rec&&rec[field]!=null?Number(rec[field]):Math.max(0,Math.round(Number(calculated)||0));}
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 const monthNow=()=>today().slice(0,7);
 const monthRange=m=>{const d=new Date(m+'-01T00:00:00');return {start:m+'-01',end:new Date(d.getFullYear(),d.getMonth()+1,1).toISOString().slice(0,10)}};
@@ -176,7 +171,7 @@ async function loadPersonRegister(){
   const {start,end,days}=personMonthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:att,error:attError},{data:hols,error:holError}]=await Promise.all([
     db.from('employees').select('id,employee_code,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('employee_code').order('name'),
-    db.from('daily_records').select('id,work_date,employee_id,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes').gte('work_date',start).lte('work_date',end),
+    db.from('daily_records').select('id,work_date,employee_id,in_time,out_time,in_time_2,out_time_2,worked_minutes,ot_minutes,ut_minutes,sl_minutes,ut_override_minutes,sl_override_minutes,ot_override_minutes').gte('work_date',start).lte('work_date',end),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lte('work_date',end),
     db.from('holidays').select('holiday_date,name').gte('holiday_date',start).lte('holiday_date',end)
   ]);
@@ -208,43 +203,38 @@ async function loadPersonRegister(){
     const in2=draft?.in_time_2||(emp.split_shift?rec?.in_time_2?.slice(0,5)||'':'');
     if(emp.split_shift)window.__personSecondShift.set(emp.id+'|'+date,{out_time:firstOut,in_time_2:in2,out_time_2:outTime});
     const live=rec||draft?calcLiveMinutes(emp,inTime,emp.split_shift?firstOut:outTime,emp.split_shift?in2:'',emp.split_shift?outTime:'',date,holidaySet.has(date)):null;
-    const dirty=!!draft;
-    const ut=dirty?dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date)).ut:(emp.name==='Gautam'?0:Number(rec?.ut_minutes)||0);
-    const sl=dirty?dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date)).sl:Number(rec?.sl_minutes)||0;
-    const ot=dirty?(live?.ot??0):Number(rec?.ot_minutes)||0;
+    const calcAdj=dailyTimeAdjustments(emp,inTime,date,holidaySet.has(date)),calcOt=live?.ot??(rec?Number(rec.ot_minutes)||0:0);
+    const ut=draft?(draft.ut_override!=null?draft.ut_override:calcAdj.ut):effectiveAdjustment(rec,'ut_override_minutes',calcAdj.ut);
+    const sl=draft?(draft.sl_override!=null?draft.sl_override:calcAdj.sl):effectiveAdjustment(rec,'sl_override_minutes',calcAdj.sl);
+    const ot=draft?(draft.ot_override!=null?draft.ot_override:calcOt):effectiveAdjustment(rec,'ot_override_minutes',calcOt);
     totalUT+=ut;totalSL+=sl;totalOT+=ot;
-    const input=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
-    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'"><td>'+fmtDate(date)+'</td><td>'+input('personIn',inTime)+'</td><td class="personUT">'+fmtMin(ut)+'</td><td>'+input('personOut',outTime)+'</td><td class="personSL">'+fmtMin(sl)+'</td><td class="personOT">'+fmtMin(ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
+    const timeInput=(cls,val)=>'<input class="timeEdit '+cls+'" type="text" inputmode="numeric" maxlength="5" autocomplete="off" value="'+esc(val||'')+'">';
+    const adjustInput=(cls,val)=>'<input class="adjustEdit '+cls+'" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(val))+'">';
+    html+='<tr data-person-row data-date="'+date+'" data-employee-id="'+emp.id+'" data-orig-in="'+esc(rec?.in_time?.slice(0,5)||'')+'" data-orig-out="'+esc(emp.split_shift?(rec?.out_time_2?.slice(0,5)||''):(rec?.out_time?.slice(0,5)||''))+'" data-orig-status="'+esc(explicitStatus||personSuggestedStatus(emp,rec,date,explicitStatus,holidaySet.has(date)))+'" data-orig-first-out="'+esc(firstOut||'')+'" data-orig-in2="'+esc(in2||'')+'" data-orig-ut-display="'+esc(adjustmentInputValue(ut))+'" data-orig-sl-display="'+esc(adjustmentInputValue(sl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(ot))+'" data-orig-ut-override="'+(draft?(draft.ut_override==null?'':draft.ut_override):(rec?.ut_override_minutes==null?'':rec.ut_override_minutes))+'" data-orig-sl-override="'+(draft?(draft.sl_override==null?'':draft.sl_override):(rec?.sl_override_minutes==null?'':rec.sl_override_minutes))+'" data-orig-ot-override="'+(draft?(draft.ot_override==null?'':draft.ot_override):(rec?.ot_override_minutes==null?'':rec.ot_override_minutes))+'"><td>'+fmtDate(date)+'</td><td>'+timeInput('personIn',inTime)+'</td><td>'+adjustInput('personUT',ut)+'</td><td>'+timeInput('personOut',outTime)+'</td><td>'+adjustInput('personSL',sl)+'</td><td>'+adjustInput('personOT',ot)+'</td><td><select class="personAttendance">'+personStatusOptions(emp,status)+'</select></td></tr>';
   }
   $('personTabs').innerHTML=personEmployees.map((e,i)=>'<button type="button" class="secondary personTab '+(i===personEmployeeIndex?'active':'')+'" data-index="'+i+'" data-id="'+e.id+'">'+esc(e.name)+'</button>').join('');
   $('personTitle').textContent=esc(selected.name)+' | '+month;
   $('personSummary').textContent=esc(selected.name)+' | '+esc(selected.category)+' | Total UT '+fmtMin(totalUT)+' | Total SL '+fmtMin(totalSL)+' | Total OT '+fmtMin(totalOT);
   $('personRegisterTable').innerHTML=html;
   normalizeTimeFields();
-  document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance').forEach(el=>{
+  document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance,.adjustEdit').forEach(el=>{
     el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
     el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
+    if(el.classList.contains('adjustEdit'))el.addEventListener('blur',()=>{const v=String(el.value||'').trim();if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v))});
   });
 }
 
 function refreshPersonLiveTotals(){
-  const emp=personEmployees[personEmployeeIndex];
-  if(!emp)return;
-  const month=$('personMonth')?.value||monthNow();
-  const {start,days}=personMonthRange(month);
+  const emp=personEmployees[personEmployeeIndex];if(!emp)return;
   let ut=0,sl=0,ot=0;
   document.querySelectorAll('#personRegisterTable tr[data-person-row]').forEach(row=>{
-    const date=row.dataset.date;
-    const inTime=normalizeTime(row.querySelector('.personIn')?.value||'');
-    const outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
-    const bg=window.__personSecondShift?.get(emp.id+'|'+date)||{};
-    const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,false);
+    const date=row.dataset.date,inTime=normalizeTime(row.querySelector('.personIn')?.value||''),outTime=normalizeTime(row.querySelector('.personOut')?.value||''),bg=window.__personSecondShift?.get(emp.id+'|'+date)||{};
+    const live=calcLiveMinutes(emp,inTime,emp.split_shift?bg.out_time:outTime,emp.split_shift?bg.in_time_2:'',emp.split_shift?outTime:'',date,window.__personHolidaySet?.has(date)||false);
     const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false);
-    const u=emp.name==='Gautam'?0:adj.ut,s=adj.sl,o=live?.ot??0;
-    row.querySelector('.personUT').textContent=fmtMin(u);
-    row.querySelector('.personSL').textContent=fmtMin(s);
-    row.querySelector('.personOT').textContent=fmtMin(o);
-    ut+=u;sl+=s;ot+=o;
+    const u=parseAdjustmentMinutes(row.querySelector('.personUT')?.value),s=parseAdjustmentMinutes(row.querySelector('.personSL')?.value),o=parseAdjustmentMinutes(row.querySelector('.personOT')?.value);
+    const ru=u==null?adj.ut:u,rs=s==null?adj.sl:s,ro=o==null?(live?.ot??0):o;
+    row.querySelector('.personUT').value=fmtMin(ru);row.querySelector('.personSL').value=fmtMin(rs);row.querySelector('.personOT').value=fmtMin(ro);
+    ut+=ru;sl+=rs;ot+=ro;
   });
   $('personSummary').textContent=esc(emp.name)+' | '+esc(emp.category)+' | Total UT '+fmtMin(ut)+' | Total SL '+fmtMin(sl)+' | Total OT '+fmtMin(ot);
 }
@@ -421,7 +411,7 @@ async function loadRecords(){
   const date=$('recordDate').value||today();
   const [{data:emps,error:empError},{data:rows,error:rowError},{data:att},{data:hols}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).order('name'),
-    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,ut_minutes,sl_minutes,employee_id').eq('work_date',date),
+    db.from('daily_records').select('id,work_date,in_time,out_time,in_time_2,out_time_2,total_elapsed_minutes,worked_minutes,ot_minutes,ut_minutes,sl_minutes,ut_override_minutes,sl_override_minutes,ot_override_minutes,employee_id').eq('work_date',date),
     db.from('attendance').select('work_date,employee_id,status').eq('work_date',date),
     db.from('holidays').select('holiday_date,name').eq('holiday_date',date)
   ]);
@@ -480,7 +470,14 @@ async function loadRecords(){
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,visibleIn);
     const out1=input('out-'+emp.id,visibleOut);
-    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+(emp.name==='Gautam'?0:(rec?.ut_minutes??0))+'" data-stored-sl="'+(rec?.sl_minutes??0)+'" data-stored-ot="'+(rec?.ot_minutes??0)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td></td><td>'+out1+'</td><td></td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
+    const calcAdj=dailyTimeAdjustments(emp,visibleIn,date,holiday);
+    const displayUt=draft?(draft.ut_override!=null?draft.ut_override:calcAdj.ut):effectiveAdjustment(rec,'ut_override_minutes',calcAdj.ut);
+    const displaySl=draft?(draft.sl_override!=null?draft.sl_override:calcAdj.sl):effectiveAdjustment(rec,'sl_override_minutes',calcAdj.sl);
+    const displayOt=draft?(draft.ot_override!=null?draft.ot_override:(rec?Number(rec.ot_minutes)||0:0)):effectiveAdjustment(rec,'ot_override_minutes',rec?Number(rec.ot_minutes)||0:0);
+    const utInput='<input class="adjustEdit dailyUT" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displayUt))+'">';
+    const slInput='<input class="adjustEdit dailySL" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displaySl))+'">';
+    const otInput='<input class="adjustEdit dailyOT" type="text" inputmode="numeric" autocomplete="off" value="'+esc(adjustmentInputValue(displayOt))+'">';
+    html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'" data-stored-worked="'+(rec?.worked_minutes??'')+'" data-stored-ut="'+displayUt+'" data-stored-sl="'+displaySl+'" data-stored-ot="'+displayOt+'" data-orig-ut-display="'+esc(adjustmentInputValue(displayUt))+'" data-orig-sl-display="'+esc(adjustmentInputValue(displaySl))+'" data-orig-ot-display="'+esc(adjustmentInputValue(displayOt))+'" data-orig-ut-override="'+(rec?.ut_override_minutes==null?'':rec.ut_override_minutes)+'" data-orig-sl-override="'+(rec?.sl_override_minutes==null?'':rec.sl_override_minutes)+'" data-orig-ot-override="'+(rec?.ot_override_minutes==null?'':rec.ot_override_minutes)+'"'+(draft?' data-dirty="1"':'')+'><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+fmtDate(date)+'</td><td>'+in1+'</td><td>'+utInput+'</td><td>'+out1+'</td><td>'+slInput+'</td><td>'+otInput+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+hols[0].name+')':''):(dow===0?' | Sunday':'');
   $('printTitle').textContent='Daily Register - '+fmtDate(date);
@@ -488,9 +485,11 @@ async function loadRecords(){
   $('recordsTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#recordsTable .timeEdit').forEach(el=>{
-    el.addEventListener('input',markRecordUnsaved);
-    el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});
-    el.addEventListener('change',markRecordUnsaved);
+    el.addEventListener('input',markRecordUnsaved);el.addEventListener('blur',()=>{if(el.value)el.value=normalizeTime(el.value)||el.value;});el.addEventListener('change',markRecordUnsaved);
+  });
+  document.querySelectorAll('#recordsTable .adjustEdit').forEach(el=>{
+    el.addEventListener('input',markRecordUnsaved);el.addEventListener('change',markRecordUnsaved);
+    el.addEventListener('blur',()=>{const v=String(el.value||'').trim();if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v))});
   });
   document.querySelectorAll('#recordsTable .attendanceEdit').forEach(el=>el.addEventListener('change',markRecordUnsaved));
   refreshLiveTotals();
@@ -539,29 +538,19 @@ function setSaveStatus(state){
   el.textContent=state==='unsaved'?'Unsaved changes':state==='saving'?'Saving...':'All changes saved';
 }
 function refreshLiveTotals(){
-  const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;
-  let worked=0,ot=0,ut=0,sl=0;
+  const date=$('recordDate')?.value||today(),isHoliday=!!window.__recordHoliday;let worked=0,ot=0,ut=0,sl=0;
   document.querySelectorAll('#recordsTable tr[data-employee-id]').forEach(row=>{
     const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
-    const ni=$('in-'+emp.id)?.value;
-    const no=$('out-'+emp.id)?.value;
-    const bg=window.__recordSecondShift?.get(emp.id)||{};
-    const ni2=emp.split_shift?((bg.in_time_2||'').slice(0,5)):'';
-    const no2=emp.split_shift?((no||'').slice(0,5)):'';
-    const live=emp.split_shift
-      ?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday)
-      :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
-    const dirty=row.dataset.dirty==='1';
+    const ni=$('in-'+emp.id)?.value,no=$('out-'+emp.id)?.value,bg=window.__recordSecondShift?.get(emp.id)||{};
+    const ni2=emp.split_shift?(bg.in_time_2||'').slice(0,5):'',no2=emp.split_shift?(no||'').slice(0,5):'';
+    const live=emp.split_shift?calcLiveMinutes(emp,ni,(bg.out_time||'01:00').slice(0,5),ni2,no2,date,isHoliday):calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
+    const dirty=row.dataset.dirty==='1',d=recordDrafts.get(date+'|'+emp.id),auto=dailyTimeAdjustments(emp,ni,date,isHoliday);
     const rowWorked=dirty?live.worked:Number(row.dataset.storedWorked);
-    const rowOt=dirty?live.ot:Number(row.dataset.storedOt);
-    const rowUt=dirty?dailyTimeAdjustments(emp,ni,date,isHoliday).ut:Number(row.dataset.storedUt);
-    const rowSl=dirty?dailyTimeAdjustments(emp,ni,date,isHoliday).sl:Number(row.dataset.storedSl);
-    row.children[4].textContent=rowWorked==null||Number.isNaN(rowWorked)?'':fmtMin(rowUt);
-    row.children[6].textContent=rowWorked==null||Number.isNaN(rowWorked)?'':fmtMin(rowSl);
-    row.children[7].textContent=rowOt==null||Number.isNaN(rowOt)?'':fmtMin(rowOt);
-    if(rowWorked!=null&&!Number.isNaN(rowWorked))worked+=rowWorked;
-    if(rowOt!=null&&!Number.isNaN(rowOt))ot+=rowOt;
-    ut+=Number(rowUt)||0;sl+=Number(rowSl)||0;
+    const rowUt=d?(d.ut_override!=null?d.ut_override:auto.ut):Number(row.dataset.storedUt);
+    const rowSl=d?(d.sl_override!=null?d.sl_override:auto.sl):Number(row.dataset.storedSl);
+    const rowOt=d?(d.ot_override!=null?d.ot_override:(live.ot??0)):Number(row.dataset.storedOt);
+    row.querySelector('.dailyUT').value=fmtMin(rowUt);row.querySelector('.dailySL').value=fmtMin(rowSl);row.querySelector('.dailyOT').value=fmtMin(rowOt);
+    if(rowWorked!=null&&!Number.isNaN(rowWorked))worked+=rowWorked;if(rowOt!=null&&!Number.isNaN(rowOt))ot+=rowOt;ut+=rowUt;sl+=rowSl;
   });
   $('recordSummary').textContent=fmtDate(date)+' | Total Worked '+fmtMin(worked)+' | Total UT '+fmtMin(ut)+' | Total OT '+fmtMin(ot)+' | Total SL '+fmtMin(sl);
 }
@@ -583,8 +572,9 @@ async function exportRecords(){
     const r=recordMap.get(e.id);
     const inValue=r?.in_time?.slice(0,5)||'';
     const outValue=e.category==='Gateman'&&e.name==='Varinder Pal'&&r?.out_time_2?r.out_time_2.slice(0,5):(r?.out_time?.slice(0,5)||'');
-    const adj=r?{ut:e.name==='Gautam'?0:Number(r.ut_minutes)||0,sl:Number(r.sl_minutes)||0}:{ut:0,sl:0};
-    const ot=r?Number(r.ot_minutes)||0:0;
+    const calc=r?dailyTimeAdjustments(e,r.in_time?.slice(0,5)||'',date,false):{ut:0,sl:0};
+    const adj=r?{ut:effectiveAdjustment(r,'ut_override_minutes',calc.ut),sl:effectiveAdjustment(r,'sl_override_minutes',calc.sl)}:{ut:0,sl:0};
+    const ot=r?effectiveAdjustment(r,'ot_override_minutes',Number(r.ot_minutes)||0):0;
     rowsOut.push([fmtDate(date),e.name,e.category,inValue,fmtHHMM(adj.ut),outValue,fmtHHMM(adj.sl),fmtHHMM(ot),attMap.get(e.id)||'']);
   }
   downloadCSV('FCS-Daily-Register-'+date+'.csv',rowsOut);
@@ -722,7 +712,7 @@ function dailyTimeAdjustments(emp,inTime,date,isHoliday){
   if(inMin==null)return {ut:0,sl:0};
   const normalStart=normalStartMinutesForEmployee(emp);
   const sl=inMin>normalStart?inMin-normalStart:0;
-  const ut=emp.name==='Gautam'?0:emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
+  const ut=emp.name==='Gautam'&&inMin>=7*60+30&&inMin<9*60?9*60-inMin:emp.category==='Gateman'&&inMin<(8*60+40)?Math.floor((9*60-inMin)/30)*30:emp.category==='Driver'&&inMin<(8*60+40)?9*60-inMin:0;
   return {ut,sl};
 }
 function dailyAdjustments(emp,record,date,isHoliday){
@@ -737,7 +727,7 @@ async function getOTReportBase(){
   const {start,end}=monthRange(month);
   const [{data:emps,error:empError},{data:records,error:recError},{data:hols,error:holError},{data:atts,error:attError}]=await Promise.all([
     db.from('employees').select('id,name,category,normal_work_minutes,break_minutes,round_minutes,split_shift').eq('active',true).in('category',['Driver','Gateman']).order('name'),
-    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes,ut_minutes,sl_minutes').gte('work_date',start).lt('work_date',end),
+    db.from('daily_records').select('work_date,employee_id,in_time,out_time,in_time_2,out_time_2,ot_minutes,ut_minutes,sl_minutes,ut_override_minutes,sl_override_minutes,ot_override_minutes').gte('work_date',start).lt('work_date',end),
     db.from('holidays').select('holiday_date').gte('holiday_date',start).lt('holiday_date',end),
     db.from('attendance').select('work_date,employee_id,status').gte('work_date',start).lt('work_date',end)
   ]);
@@ -751,9 +741,10 @@ async function getOTReportBase(){
     let ot=0,ut=0,sl=0;
     for(const r of records||[]){
       if(r.employee_id!==e.id)continue;
-      ot+=Number(r.ot_minutes)||0;
-      ut+=e.name==='Gautam'?0:Number(r.ut_minutes)||0;
-      sl+=Number(r.sl_minutes)||0;
+      const calc=dailyTimeAdjustments(e,r.in_time?.slice(0,5)||'',r.work_date,holidaySet.has(r.work_date));
+      ot+=effectiveAdjustment(r,'ot_override_minutes',Number(r.ot_minutes)||0);
+      ut+=effectiveAdjustment(r,'ut_override_minutes',calc.ut);
+      sl+=effectiveAdjustment(r,'sl_override_minutes',calc.sl);
     }
     totals.set(e.id,{ot,ut,sl,net:ut+ot-sl});
   }
@@ -783,9 +774,10 @@ async function getOTReportData(){
     for(let day=1;day<=daysInMonth;day++){
       const date=base.month+'-'+String(day).padStart(2,'0');
       const r=base.byKey.get(date+'|'+e.id);
-      const ot=r?Number(r.ot_minutes)||0:0;
-      const ut=e.name==='Gautam'?0:Number(r?.ut_minutes)||0;
-      const sl=Number(r?.sl_minutes)||0;
+      const calc=r?dailyTimeAdjustments(e,r.in_time?.slice(0,5)||'',date,base.holidaySet.has(date)):{ut:0,sl:0};
+      const ot=r?effectiveAdjustment(r,'ot_override_minutes',Number(r.ot_minutes)||0):0;
+      const ut=r?effectiveAdjustment(r,'ut_override_minutes',calc.ut):0;
+      const sl=r?effectiveAdjustment(r,'sl_override_minutes',calc.sl):0;
       otTotal+=ot;utTotal+=ut;slTotal+=sl;
       days.push({date,in1:r?.in_time||'',out1:r?.out_time||'',in2:r?.in_time_2||'',out2:r?.out_time_2||'',ot,ut,sl,attendance:base.attendanceByKey.get(date+'|'+e.id)||''});
     }
@@ -864,7 +856,7 @@ async function saveAllChanges(){
     const groups=new Map();
     for(const [key,d] of dirty){if(!groups.has(d.date))groups.set(d.date,[]);groups.get(d.date).push([key,d]);}
     for(const [date,items] of groups){
-      const {data:existing,error:existingError}=await db.from('daily_records').select('id,employee_id,in_time,out_time,in_time_2,out_time_2').eq('work_date',date);
+      const {data:existing,error:existingError}=await db.from('daily_records').select('id,employee_id,in_time,out_time,in_time_2,out_time_2,ut_override_minutes,sl_override_minutes,ot_override_minutes').eq('work_date',date);
       if(existingError)throw new Error(existingError.message);
       const idMap=new Map((existing||[]).map(r=>[r.employee_id,r]));
       for(const [key,d] of items){
@@ -891,7 +883,10 @@ async function saveAllChanges(){
             normal_work_minutes:er.normal_work_minutes,
             ot_eligible:er.ot_eligible,
             ot_threshold_minutes:er.ot_threshold_minutes,
-            round_minutes:er.round_minutes
+            round_minutes:er.round_minutes,
+            ut_override_minutes:d.ut_override==null?null:d.ut_override,
+            sl_override_minutes:d.sl_override==null?null:d.sl_override,
+            ot_override_minutes:d.ot_override==null?null:d.ot_override
           };
           const result=old
             ?await db.from('daily_records').update(payload).eq('id',old.id)
