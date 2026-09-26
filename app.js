@@ -502,6 +502,7 @@ function fmtHHMM(mins){
   return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 }
 function normalStartMinutesForEmployee(emp){
+  if(emp?.name==='Gautam')return 7*60+30;
   if(emp?.split_shift)return 18*60;
   const rule=rules.find(r=>r.category===emp?.category);
   if(rule?.normal_start){
