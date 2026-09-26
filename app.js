@@ -81,4 +81,4 @@ $('inTime').addEventListener('blur',e=>{if(e.target.value)e.target.value=normali
 $('outTime').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
 $('inTime2').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
 $('outTime2').addEventListener('blur',e=>{if(e.target.value)e.target.value=normalizeTime(e.target.value)||e.target.value});
-(async()=>{await loadEmployees();updatePending();await syncQueue();})();
+(async()=>{if('serviceWorker'in navigator){const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();if(window.caches){for(const k of await caches.keys())if(k.startsWith('fcs-attendance-'))await caches.delete(k)}}await loadEmployees();updatePending();await syncQueue();})();
