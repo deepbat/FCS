@@ -105,29 +105,33 @@ let personEmployees=[];
 let personEmployeeIndex=0;
 
 function capturePersonRowDraft(row){
-  const date=row?.dataset?.date;
-  const employeeId=row?.dataset?.employeeId;
+  const date=row?.dataset?.date,employeeId=row?.dataset?.employeeId;
   if(!date||!employeeId)return;
-  const emp=personEmployees.find(e=>e.id===employeeId);
-  if(!emp)return;
-  const inTime=normalizeTime(row.querySelector('.personIn')?.value||'');
-  const outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
+  const emp=personEmployees.find(e=>e.id===employeeId);if(!emp)return;
+  const inTime=normalizeTime(row.querySelector('.personIn')?.value||''),outTime=normalizeTime(row.querySelector('.personOut')?.value||'');
   const status=row.querySelector('.personAttendance')?.value||'';
   const bg=window.__personSecondShift?.get(employeeId+'|'+date)||{};
-  const oldIn=(row.dataset.origIn||'');
-  const oldOut=(row.dataset.origOut||'');
-  const oldStatus=(row.dataset.origStatus||'');
-  const oldFirst=(row.dataset.origFirstOut||'');
-  const oldIn2=(row.dataset.origIn2||'');
-  const changed=inTime!==oldIn||outTime!==oldOut||status!==oldStatus||
+  const oldIn=row.dataset.origIn||'',oldOut=row.dataset.origOut||'',oldStatus=row.dataset.origStatus||'',oldFirst=row.dataset.origFirstOut||'',oldIn2=row.dataset.origIn2||'';
+  const readOverride=(selector,origDisplay)=>{
+    const raw=String(row.querySelector(selector)?.value??'').trim();
+    if(raw===origDisplay)return null;
+    return raw===''?null:parseAdjustmentMinutes(raw);
+  };
+  const utOverride=readOverride('.personUT',row.dataset.origUtDisplay||'');
+  const slOverride=readOverride('.personSL',row.dataset.origSlDisplay||'');
+  const otOverride=readOverride('.personOT',row.dataset.origOtDisplay||'');
+  const adjChanged=String(row.querySelector('.personUT')?.value??'').trim()!==(row.dataset.origUtDisplay||'')||
+    String(row.querySelector('.personSL')?.value??'').trim()!==(row.dataset.origSlDisplay||'')||
+    String(row.querySelector('.personOT')?.value??'').trim()!==(row.dataset.origOtDisplay||'');
+  const changed=inTime!==oldIn||outTime!==oldOut||status!==oldStatus||adjChanged||
     (emp.split_shift&&((bg.out_time||'')!==oldFirst||(bg.in_time_2||'')!==oldIn2));
   const key=date+'|'+employeeId;
   if(changed){
     recordDrafts.set(key,{date,employee_id:employeeId,in_time:inTime,out_time:outTime,status,split:!!emp.split_shift,
-      first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',dirty:true});
+      first_out:emp.split_shift?(bg.out_time||'').slice(0,5):'',in_time_2:emp.split_shift?(bg.in_time_2||'').slice(0,5):'',
+      ut_override:utOverride,sl_override:slOverride,ot_override:otOverride,dirty:true});
   }else{
-    const d=recordDrafts.get(key);
-    if(d?.dirty)recordDrafts.delete(key);
+    const d=recordDrafts.get(key);if(d?.dirty)recordDrafts.delete(key);
   }
 }
 
@@ -218,9 +222,19 @@ async function loadPersonRegister(){
   $('personRegisterTable').innerHTML=html;
   normalizeTimeFields();
   document.querySelectorAll('#personRegisterTable .personIn,#personRegisterTable .personOut,.personAttendance,.adjustEdit').forEach(el=>{
-    el.addEventListener('input',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
-    el.addEventListener('change',()=>{const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals()});
-    if(el.classList.contains('adjustEdit'))el.addEventListener('blur',()=>{const v=String(el.value||'').trim();if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v))});
+    el.addEventListener('input',()=>{
+      const row=el.closest('tr[data-person-row]');
+      if(el.classList.contains('adjustEdit')){setSaveStatus('unsaved');return}
+      capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals();
+    });
+    el.addEventListener('change',()=>{
+      const row=el.closest('tr[data-person-row]');capturePersonRowDraft(row);setSaveStatus('unsaved');refreshPersonLiveTotals();
+    });
+    if(el.classList.contains('adjustEdit'))el.addEventListener('blur',()=>{
+      const v=String(el.value||'').trim();
+      if(v&&parseAdjustmentMinutes(v)!=null)el.value=fmtMin(parseAdjustmentMinutes(v));
+      capturePersonRowDraft(el.closest('tr[data-person-row]'));setSaveStatus('unsaved');refreshPersonLiveTotals();
+    });
   });
 }
 
@@ -233,7 +247,10 @@ function refreshPersonLiveTotals(){
     const adj=dailyTimeAdjustments(emp,inTime,date,window.__personHolidaySet?.has(date)||false),d=recordDrafts.get(date+'|'+emp.id);
     const u=parseAdjustmentMinutes(row.querySelector('.personUT')?.value),s=parseAdjustmentMinutes(row.querySelector('.personSL')?.value),o=parseAdjustmentMinutes(row.querySelector('.personOT')?.value);
     const ru=d?(d.ut_override!=null?d.ut_override:adj.ut):u,rs=d?(d.sl_override!=null?d.sl_override:adj.sl):s,ro=d?(d.ot_override!=null?d.ot_override:(live?.ot??0)):o;
-    row.querySelector('.personUT').value=fmtMin(ru);row.querySelector('.personSL').value=fmtMin(rs);row.querySelector('.personOT').value=fmtMin(ro);
+    const ui=row.querySelector('.personUT'),si=row.querySelector('.personSL'),oi=row.querySelector('.personOT');
+    if(document.activeElement!==ui)ui.value=fmtMin(ru);
+    if(document.activeElement!==si)si.value=fmtMin(rs);
+    if(document.activeElement!==oi)oi.value=fmtMin(ro);
     ut+=ru;sl+=rs;ot+=ro;
   });
   $('personSummary').textContent=esc(emp.name)+' | '+esc(emp.category)+' | Total UT '+fmtMin(ut)+' | Total SL '+fmtMin(sl)+' | Total OT '+fmtMin(ot);
