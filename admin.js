@@ -89,10 +89,8 @@ function monthToolbar(){
 return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><div class="personTabs">'+employees.filter(e=>e.active).map((e,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(e.name)+'</button>').join('')+'</div><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
 }
 function datesForMonth(){
- const [start,end]=range(month);let cutoff=month===new Date().toISOString().slice(0,7)?new Date().toISOString().slice(0,10):end;
- const entered=records.map(r=>r.work_date).concat(attendance.map(a=>a.work_date)).filter(d=>d>=start&&d<end).sort();
- if(month===new Date().toISOString().slice(0,7)&&entered.length)cutoff=entered[entered.length-1];
- if(month!==new Date().toISOString().slice(0,7))cutoff=end;
+ const [start,end]=range(month);const today=new Date().toISOString().slice(0,10);const currentMonth=new Date().toISOString().slice(0,7);
+ let cutoff=month===currentMonth?today:end;
  const out=[];let d=new Date(start+'T12:00:00'),z=new Date(cutoff+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
 }
 function renderRegister(){
