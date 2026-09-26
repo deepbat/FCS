@@ -184,7 +184,7 @@ async function loadRecords(){
   const holiday=(hols||[]).length>0, dow=new Date(date+'T00:00:00').getDay();
   window.__recordEmployees=list;
   window.__recordHoliday=holiday;
-  window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
+  window.__recordSecondShift=new Map((rows||[]).map(r=>[r.employee_id,{out_time:r.out_time,in_time_2:r.in_time_2,out_time_2:r.out_time_2}]));
   let totalWorked=0,totalOt=0;
   const staffStatuses=['Present','First Half Leave','Second Half Leave','Full Day Leave'];
   const otherStatuses=['Present','Absent','Leave','Half Day','Holiday','Sunday'];
@@ -216,7 +216,10 @@ async function loadRecords(){
     const statuses=emp.category==='Staff'?staffStatuses:otherStatuses;
     const statusSelect='<select class="attendanceEdit" id="a-'+emp.id+'"><option></option>'+statuses.map(s=>'<option '+(status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>';
     const in1=input('in-'+emp.id,rec?.in_time?.slice(0,5));
-    const out1=input('out-'+emp.id,rec?.out_time?.slice(0,5));
+    // For Varinder's split shift, show final OUT (second shift) in the single OUT column.
+    // First OUT and second IN remain stored in the background.
+    const displayedOut=emp.split_shift&&rec?.out_time_2?rec.out_time_2:rec?.out_time;
+    const out1=input('out-'+emp.id,displayedOut?.slice(0,5));
     html+='<tr data-employee-id="'+emp.id+'" data-record-id="'+(rec?esc(rec.id):'')+'"><td>'+esc(emp.name)+'</td><td>'+esc(emp.category)+'</td><td>'+in1+'</td><td>'+out1+'</td><td>'+(rec?fmtMin(rec.worked_minutes):'')+'</td><td>'+(rec?fmtMin(rec.ot_minutes):'')+'</td><td>'+statusSelect+'</td></tr>';
   }
   const holidayLabel=holiday?' | Holiday'+((hols||[])[0]?.name?' ('+(hols[0].name)+')':''):(dow===0?' | Sunday':'');
@@ -276,9 +279,12 @@ function refreshLiveTotals(){
     const emp=window.__recordEmployees?.find(e=>e.id===row.dataset.employeeId);if(!emp)return;
     const ni=$('in-'+emp.id)?.value;
     const no=$('out-'+emp.id)?.value;
-    const ni2=emp.split_shift?((window.__recordSecondShift?.get(emp.id)?.in_time_2||'').slice(0,5)):'';
-    const no2=emp.split_shift?((window.__recordSecondShift?.get(emp.id)?.out_time_2||'').slice(0,5)):'';
-    const live=calcLiveMinutes(emp,ni,no,ni2,no2,date,isHoliday);
+    const bg=window.__recordSecondShift?.get(emp.id)||{};
+    const ni2=emp.split_shift?((bg.in_time_2||'').slice(0,5)):'';
+    const no2=emp.split_shift?((no||'').slice(0,5)):'';
+    const live=emp.split_shift
+      ?calcLiveMinutes(emp,ni,(bg.out_time||'').slice(0,5),ni2,no2,date,isHoliday)
+      :calcLiveMinutes(emp,ni,no,'','',date,isHoliday);
     const workedCell=row.children[4],otCell=row.children[5];
     workedCell.textContent=live.worked==null?'':fmtMin(live.worked);
     otCell.textContent=live.ot==null?'':fmtMin(live.ot);
@@ -549,7 +555,7 @@ async function saveAllChanges(){
       // Daily Register does not display IN 2 / OUT 2, so preserve existing values here.
       const existingRow=idMap.has(emp.id)?(existing.data||[]).find(r=>r.id===idMap.get(emp.id)):null;
       const ni2=split?(existingRow?.in_time_2?String(existingRow.in_time_2).slice(0,5):''):'';
-      const no2=split?(existingRow?.out_time_2?String(existingRow.out_time_2).slice(0,5):''):'';
+      const no2=split?no:'';
       const status=$('a-'+emp.id).value;
       if((ni||no||ni2||no2)&&(!ni||!no))throw new Error('Please enter both IN and OUT for '+emp.name+'.');
       if(!split&&ni&&no&&timeMinutes(no)<timeMinutes(ni))throw new Error('OUT time cannot be earlier than IN time for '+emp.name+'.');
@@ -558,7 +564,17 @@ async function saveAllChanges(){
       const er=effectiveRule(emp);
       if(ni&&no){
         const existingRow=(existing.data||[]).find(r=>r.employee_id===emp.id);
-        const payload={in_time:ni+':00',out_time:no+':00',in_time_2:split?(existingRow?.in_time_2||null):null,out_time_2:split?(existingRow?.out_time_2||null):null,break_minutes:er.break_minutes,normal_work_minutes:er.normal_work_minutes,ot_eligible:er.ot_eligible,ot_threshold_minutes:er.ot_threshold_minutes,round_minutes:er.round_minutes};
+        const payload={
+          in_time:ni+':00',
+          out_time:split?(existingRow?.out_time||'01:00:00'):no+':00',
+          in_time_2:split?(existingRow?.in_time_2||null):null,
+          out_time_2:split?(no2?no2+':00':null):null,
+          break_minutes:er.break_minutes,
+          normal_work_minutes:er.normal_work_minutes,
+          ot_eligible:er.ot_eligible,
+          ot_threshold_minutes:er.ot_threshold_minutes,
+          round_minutes:er.round_minutes
+        };
         const id=idMap.get(emp.id);
         const result=id?await db.from('daily_records').update(payload).eq('id',id):await db.from('daily_records').insert({client_id:crypto.randomUUID(),work_date:date,employee_id:emp.id,...payload});
         if(result.error)throw new Error(result.error.message);
