@@ -6,9 +6,25 @@ let employees=[];
 const QUEUE_KEY='fcs-attendance-pending-v2';
 const getQueue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')}catch{return[]}};
 const setQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));
-function updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?'Pending sync':'Ready'}
-async function syncQueue(){const q=getQueue();if(!q.length)return;const left=[];for(const p of q){try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});if(r.error)throw r.error;const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)throw a.error}catch(e){left.push(p)}}setQueue(left);updatePending()}
-window.addEventListener('online',syncQueue);
+let syncing=false;
+function updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?(syncing?'Syncing...':'Pending sync'):'Ready'}
+async function syncQueue(){
+  if(syncing)return;
+  const q=getQueue();if(!q.length){updatePending();return}
+  syncing=true;updatePending();
+  const left=[];
+  for(const p of q){
+    let recordOk=false,attendanceOk=false;
+    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});recordOk=!r.error}catch(e){}
+    try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});attendanceOk=!a.error}catch(e){}
+    if(!recordOk||!attendanceOk)left.push(p);
+  }
+  setQueue(left);syncing=false;updatePending();
+}
+window.addEventListener('online',()=>syncQueue());
+window.addEventListener('focus',()=>syncQueue());
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncQueue()});
+setInterval(()=>{if(getQueue().length)syncQueue()},10000);
 
 function today(){
   const d=new Date(); return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -72,7 +88,7 @@ async function save(){
     const q=getQueue();q.push({record:payload,attendance:attendancePayload});setQueue(q);updatePending();
     clearInputs();setMessage('Saved on this device. It will sync when internet is available.');return
   }
-  updatePending();clearInputs();setMessage('Saved successfully.');
+  updatePending();clearInputs();setMessage('Saved successfully.');syncQueue();
 }
 $('workDate').value=today();
 $('employee').addEventListener('change',updateSplit);
