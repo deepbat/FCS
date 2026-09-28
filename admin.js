@@ -37,9 +37,10 @@ function calc(e,rec,date){
   let ut=0,sl=0;
   if(!e.split_shift&&!isSunday(date)&&!hol(date)){
     const special=e.name==='Gautam'&&e.category==='Gateman';
+    const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(mins(r.normal_start)||540);
     if((e.category==='Driver'||e.category==='Gateman')&&a<520)ut=Math.floor((540-a)/30)*30;
     if(special){ut=a<450?Math.floor((540-a)/30)*30:Math.max(0,540-a);sl=Math.max(0,a-450)}
-    else sl=Math.max(0,a-(mins(r.normal_start)||540));
+    else sl=Math.max(0,a-start);
   }
   const otEligible=!!r.ot_eligible;
   let ot=0;
