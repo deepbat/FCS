@@ -75,12 +75,25 @@ async function save(){
     in_time:it,out_time:ot,in_time_2:e.split_shift?it2:null,out_time_2:e.split_shift?ot2:null,
     break_minutes:e.break_minutes||0,normal_work_minutes:e.normal_work_minutes||0,
     ot_eligible:e.category==='Driver'||e.category==='Gateman',ot_threshold_minutes:15,
-    round_minutes:e.round_minutes||0,full_day_ot:false,updated_at:new Date().toISOString()
+    round_minutes:e.round_minutes||0,full_day_ot:false,total_elapsed_minutes:elapsed,worked_minutes:elapsed,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const sunday=new Date(date+'T12:00:00').getDay()===0;
   let status=sunday?'Sunday':'Present';
   const {data:hol}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
   if(hol)status='Holiday';
+  let elapsed=0;
+  if(e.split_shift){
+    elapsed=minutes(ot)-minutes(it);
+    if(elapsed<0)elapsed+=1440;
+    elapsed+=minutes(ot2)-minutes(it2);
+    if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes;
+  }else{
+    elapsed=minutes(ot)-minutes(it);if(elapsed<0)elapsed+=1440;
+    elapsed=Math.max(0,elapsed-(e.break_minutes||0));
+  }
+  const normal=e.split_shift?(e.normal_work_minutes||0):(e.normal_work_minutes||0);
+  const rule=(await db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes').eq('category',e.category).maybeSingle()).data;
+  const ot=rule?.ot_eligible&&elapsed>((normal||rule?.normal_work_minutes||0)+(rule?.ot_threshold_minutes||0))?elapsed-(normal||rule?.normal_work_minutes||0):0;
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
   const result=await db.from('daily_records').upsert(payload,{onConflict:'client_id'});
   const ar=await db.from('attendance').upsert(attendancePayload,{onConflict:'work_date,employee_id'});
