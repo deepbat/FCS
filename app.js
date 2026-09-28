@@ -88,7 +88,9 @@ async function save(){
   const {data:hol}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
   if(hol)status='Holiday';
   const rule=(await db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes').eq('category',e.category).maybeSingle()).data;
-  const normal=e.split_shift?(e.normal_work_minutes||rule?.normal_work_minutes||0):(e.normal_work_minutes||rule?.normal_work_minutes||0);
+  const normal=e.normal_work_minutes||rule?.normal_work_minutes||0;
+  const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(rule?.normal_start?minutes(rule.normal_start):540);
+  const sl=!e.split_shift&&!sunday&&!hol?Math.max(0,minutes(it)-start):0;
   const ot=rule?.ot_eligible&&((sunday||hol)?elapsed:elapsed>(normal+(rule?.ot_threshold_minutes||0))?elapsed-normal:0);
   const record={
     client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
@@ -96,7 +98,7 @@ async function save(){
     break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,
     ot_eligible:!!rule?.ot_eligible,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
     round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||hol),total_elapsed_minutes:elapsed,
-    worked_minutes:elapsed,ot_minutes:ot,updated_at:new Date().toISOString()
+    worked_minutes:elapsed,sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
   const result=await db.from('daily_records').upsert(record,{onConflict:'client_id'});
