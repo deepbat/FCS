@@ -6,20 +6,20 @@ let employees=[];
 const QUEUE_KEY='fcs-attendance-pending-v2';
 const getQueue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')}catch{return[]}};
 const setQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));
-let syncing=false;
-function updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?(syncing?'Syncing...':'Pending sync'):'Ready'}
+let syncing=false,lastSyncError='';
+function updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?(syncing?'Syncing...':(lastSyncError?'Sync failed':'Pending sync')):'Ready'}
 async function syncQueue(){
   if(syncing)return;
   const q=getQueue();if(!q.length){updatePending();return}
   syncing=true;updatePending();
-  const left=[];
+  const left=[];lastSyncError='';
   for(const p of q){
     let recordOk=false,attendanceOk=false;
-    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});recordOk=!r.error}catch(e){}
-    try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});attendanceOk=!a.error}catch(e){}
+    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
+    try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)lastSyncError=a.error.message;else attendanceOk=true}catch(e){lastSyncError=e?.message||String(e)}
     if(!recordOk||!attendanceOk)left.push(p);
   }
-  setQueue(left);syncing=false;updatePending();
+  setQueue(left);syncing=false;updatePending();if(left.length&&lastSyncError)setMessage('Sync failed: '+lastSyncError,true);
 }
 window.addEventListener('online',()=>syncQueue());
 window.addEventListener('focus',()=>syncQueue());
