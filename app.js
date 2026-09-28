@@ -54,9 +54,10 @@ async function loadEmployees(){
   updateSplit();
 }
 function updateSplit(){
-  const e=employees.find(x=>x.id===$('employee').value);
-  $('splitFields').classList.toggle('hidden',!e?.split_shift);
-  if(e?.split_shift){$('inTime').placeholder='6:00pm';$('outTime').placeholder='1:00am'}else{$('inTime').placeholder='9:00';$('outTime').placeholder='5:45'}
+  const e=employees.find(x=>x.id===$('employee').value),v=e?.name==='Varinder Pal'&&e?.split_shift;
+  $('splitFields').classList.toggle('hidden',true);
+  if(v){$('inTime').placeholder='6:00pm';$('outTime').placeholder='8:00am'}
+  else{$('inTime').placeholder='9:00';$('outTime').placeholder='5:45'}
 }
 function clearInputs(){
   $('inTime').value='';$('outTime').value='';$('inTime2').value='';$('outTime2').value='';
@@ -65,40 +66,43 @@ async function save(){
   setMessage('');
   const e=employees.find(x=>x.id===$('employee').value),date=$('workDate').value;
   if(!e||!date){setMessage('Select date and employee.',true);return}
-  const it=normalizeTime($('inTime').value),ot=normalizeTime($('outTime').value);
-  const it2=normalizeTime($('inTime2').value),ot2=normalizeTime($('outTime2').value);
-  if(!it||!ot){setMessage('Enter valid IN and OUT times.',true);return}
-  if(!e.split_shift&&minutes(ot)<minutes(it)){setMessage('OUT cannot be earlier than IN.',true);return}
-  if(e.split_shift&&(!it2||!ot2)){setMessage('Enter both second-shift times.',true);return}
-  const payload={
-    client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
-    in_time:it,out_time:ot,in_time_2:e.split_shift?it2:null,out_time_2:e.split_shift?ot2:null,
-    break_minutes:e.break_minutes||0,normal_work_minutes:e.normal_work_minutes||0,
-    ot_eligible:e.category==='Driver'||e.category==='Gateman',ot_threshold_minutes:15,
-    round_minutes:e.round_minutes||0,full_day_ot:false,total_elapsed_minutes:elapsed,worked_minutes:elapsed,ot_minutes:ot,updated_at:new Date().toISOString()
-  };
+  const it=normalizeTime($('inTime').value),visibleOut=normalizeTime($('outTime').value);
+  if(!it||!visibleOut){setMessage('Enter valid IN and OUT times.',true);return}
+  const varinder=e.name==='Varinder Pal'&&e.split_shift;
+  const firstOut=varinder?'01:00':visibleOut;
+  const secondIn=varinder?'06:00':normalizeTime($('inTime2').value);
+  const secondOut=varinder?visibleOut:normalizeTime($('outTime2').value);
+  if(!e.split_shift&&minutes(visibleOut)<minutes(it)){setMessage('OUT cannot be earlier than IN.',true);return}
+  if(e.split_shift&&!varinder&&(!secondIn||!secondOut)){setMessage('Enter both second-shift times.',true);return}
+  let elapsed=0;
+  if(e.split_shift){
+    elapsed=minutes(firstOut)-minutes(it);if(elapsed<0)elapsed+=1440;
+    elapsed+=minutes(secondOut)-minutes(secondIn);
+    if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes;
+  }else{
+    elapsed=minutes(visibleOut)-minutes(it);if(elapsed<0)elapsed+=1440;
+    elapsed=Math.max(0,elapsed-(e.break_minutes||0));
+  }
   const sunday=new Date(date+'T12:00:00').getDay()===0;
   let status=sunday?'Sunday':'Present';
   const {data:hol}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
   if(hol)status='Holiday';
-  let elapsed=0;
-  if(e.split_shift){
-    elapsed=minutes(ot)-minutes(it);
-    if(elapsed<0)elapsed+=1440;
-    elapsed+=minutes(ot2)-minutes(it2);
-    if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes;
-  }else{
-    elapsed=minutes(ot)-minutes(it);if(elapsed<0)elapsed+=1440;
-    elapsed=Math.max(0,elapsed-(e.break_minutes||0));
-  }
-  const normal=e.split_shift?(e.normal_work_minutes||0):(e.normal_work_minutes||0);
   const rule=(await db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes').eq('category',e.category).maybeSingle()).data;
-  const ot=rule?.ot_eligible&&elapsed>((normal||rule?.normal_work_minutes||0)+(rule?.ot_threshold_minutes||0))?elapsed-(normal||rule?.normal_work_minutes||0):0;
+  const normal=e.split_shift?(e.normal_work_minutes||rule?.normal_work_minutes||0):(e.normal_work_minutes||rule?.normal_work_minutes||0);
+  const ot=rule?.ot_eligible&&((sunday||hol)?elapsed:elapsed>(normal+(rule?.ot_threshold_minutes||0))?elapsed-normal:0);
+  const record={
+    client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
+    in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
+    break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,
+    ot_eligible:!!rule?.ot_eligible,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
+    round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||hol),total_elapsed_minutes:elapsed,
+    worked_minutes:elapsed,ot_minutes:ot,updated_at:new Date().toISOString()
+  };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
-  const result=await db.from('daily_records').upsert(payload,{onConflict:'client_id'});
+  const result=await db.from('daily_records').upsert(record,{onConflict:'client_id'});
   const ar=await db.from('attendance').upsert(attendancePayload,{onConflict:'work_date,employee_id'});
   if(result.error||ar.error){
-    const q=getQueue();q.push({record:payload,attendance:attendancePayload});setQueue(q);updatePending();
+    const q=getQueue();q.push({record,attendance:attendancePayload});setQueue(q);updatePending();
     clearInputs();setMessage('Saved on this device. It will sync when internet is available.');return
   }
   updatePending();clearInputs();setMessage('Saved successfully.');syncQueue();
