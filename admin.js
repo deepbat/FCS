@@ -69,7 +69,7 @@ function rowKey(date,id){return date+'|'+id}
 function getDraft(date,id){
   const key=rowKey(date,id);if(drafts.has(key))return drafts.get(key);
   const r=records.find(x=>x.work_date===date&&x.employee_id===id),a=attendance.find(x=>x.work_date===date&&x.employee_id===id),e=emp(id);
-  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);if(isVarinder(e)&&r?.ot_minutes!=null)c.ot=Number(r.ot_minutes)||0;const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
+  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);if(r?.ut_override_minutes!=null)c.ut=Number(r.ut_override_minutes)||0;if(r?.sl_override_minutes!=null)c.sl=Number(r.sl_override_minutes)||0;if(r?.ot_override_minutes!=null)c.ot=Number(r.ot_override_minutes)||0;if(isVarinder(e)&&r?.ot_minutes!=null&&!r?.ot_override_minutes)c.ot=Number(r.ot_minutes)||0;const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
   drafts.set(key,d);return d;
 }
 function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
@@ -134,7 +134,7 @@ function editCell(tr,e){
  const date=tr.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));
  tr.querySelectorAll('[data-f]').forEach(el=>{
    const f=el.dataset.f,v=el.value;
-   if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f))d[f]=normalize(v);
+   if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;}
    else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
    else d[f]=v;
  });
@@ -148,7 +148,7 @@ function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySele
 function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl)}
 function totalsForAll(){let ot=0,ut=0,sl=0;const rows=datesForMonth();employees.filter(e=>e.active).forEach(e=>rows.forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0}));return {ot,ut,sl}}
 function updateGrandTotal(){const x=$('grandTotal');if(!x)return;const t=totalsForAll();x.textContent='Grand Total (All People):  OT '+fmtMin(t.ot)+'   UT '+fmtMin(t.ut)+'   SL '+fmtMin(t.sl)}
-function editCard(card,e){const date=card.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));card.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f,v=el.value;if(['in_time','out_time','in_time_2','out_time_2'].includes(f))d[f]=normalize(v);else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}else d[f]=v});const c=calc({...e},{...d},date);if(d.ut_override==null)d.ut=c.ut;if(d.sl_override==null)d.sl=c.sl;if(d.ot_override==null)d.ot=c.ot;markUnsaved();renderRegister();}
+function editCard(card,e){const date=card.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));card.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f,v=el.value;if(['in_time','out_time','in_time_2','out_time_2'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;}else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}else d[f]=v});const c=calc({...e},{...d},date);if(d.ut_override==null)d.ut=c.ut;if(d.sl_override==null)d.sl=c.sl;if(d.ot_override==null)d.ot=c.ot;markUnsaved();renderRegister();}
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
  let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
