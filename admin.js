@@ -17,15 +17,26 @@ function emp(id){return employees.find(e=>e.id===id)}
 function hol(date){return holidays.find(h=>h.holiday_date===date)}
 function isSunday(date){return new Date(date+'T12:00:00').getDay()===0}
 function ruleFor(e){return rules.find(r=>r.category===e.category)||{}}
+function isVarinder(e){return e?.name==='Varinder Pal'&&!!e?.split_shift}
 function calc(e,rec,date){
-  if(!rec?.in_time||!rec?.out_time)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
-  const r=ruleFor(e), a=mins(rec.in_time), b=mins(rec.out_time);
+  const varinder=isVarinder(e);
+  if(!rec?.in_time)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
+  const r=ruleFor(e), a=mins(rec.in_time);
   let elapsed;
-  if(e.split_shift){const c=mins(rec.in_time_2),d=mins(rec.out_time_2);elapsed=(b-a)+(c!=null&&d!=null?d-c:0);if(rec.round_minutes)elapsed=Math.round(elapsed/rec.round_minutes)*rec.round_minutes}
-  else elapsed=b>=a?b-a:b+1440-a;
-  const special=e.name==='Gautam'&&e.category==='Gateman';
+  if(e.split_shift){
+    const firstOut=mins(varinder?(rec.out_time||'01:00'):rec.out_time);
+    const secondIn=mins(varinder?'06:00':rec.in_time_2);
+    const secondOut=mins(varinder?(rec.final_out||rec.out_time_2):rec.out_time_2);
+    if(firstOut==null||secondIn==null||secondOut==null)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
+    elapsed=(firstOut-a)+(secondOut-secondIn);
+    if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes;
+  }else{
+    if(!rec.out_time)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
+    const b=mins(rec.out_time);elapsed=b>=a?b-a:b+1440-a;
+  }
   let ut=0,sl=0;
-  if(!isSunday(date)&&!hol(date)){
+  if(!e.split_shift&&!isSunday(date)&&!hol(date)){
+    const special=e.name==='Gautam'&&e.category==='Gateman';
     if((e.category==='Driver'||e.category==='Gateman')&&a<520)ut=Math.floor((540-a)/30)*30;
     if(special){ut=a<450?Math.floor((540-a)/30)*30:Math.max(0,540-a);sl=Math.max(0,a-450)}
     else sl=Math.max(0,a-(mins(r.normal_start)||540));
@@ -34,7 +45,10 @@ function calc(e,rec,date){
   let ot=0;
   if(otEligible){
     if(isSunday(date)||hol(date))ot=elapsed;
-    else {const normal=e.split_shift?(e.normal_work_minutes||r.normal_work_minutes||0):(r.normal_work_minutes||e.normal_work_minutes||0);if(elapsed>(normal+(r.ot_threshold_minutes||0)))ot=elapsed-normal;}
+    else {
+      const normal=e.split_shift?(e.normal_work_minutes||r.normal_work_minutes||0):(r.normal_work_minutes||e.normal_work_minutes||0);
+      if(elapsed>normal+(r.ot_threshold_minutes||0))ot=elapsed-normal;
+    }
   }
   const worked=e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0));
   return {ut,sl,ot,worked,elapsed};
@@ -55,7 +69,7 @@ function rowKey(date,id){return date+'|'+id}
 function getDraft(date,id){
   const key=rowKey(date,id);if(drafts.has(key))return drafts.get(key);
   const r=records.find(x=>x.work_date===date&&x.employee_id===id),a=attendance.find(x=>x.work_date===date&&x.employee_id===id),e=emp(id);
-  const c=calc(e,r,date);const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
+  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
   drafts.set(key,d);return d;
 }
 function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
@@ -96,24 +110,31 @@ function datesForMonth(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div>';
+ $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div>';
  $('month').onchange=e=>{month=e.target.value;activeEmployee=0;renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
- $('print').onclick=()=>window.print();
- $('excel').onclick=exportEmployee;
+ $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
- const rows=datesForMonth(),isSplit=e.split_shift;
+ const rows=datesForMonth(),isSplit=e.split_shift&&!isVarinder(e);
  let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th></tr></thead><tbody>';
- rows.forEach(date=>{const d=getDraft(date,e.id);const rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="out_time" value="'+esc(d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'});
- h+='</tbody>';$('regTable').innerHTML=h; $('regCards').innerHTML=rows.map(date=>{const d=getDraft(date,e.id);const cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="out_time" value="'+esc(d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'}).join('');
- document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
+ rows.forEach(date=>{
+   const d=getDraft(date,e.id),rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
+   h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'
+ });
+ h+='</tbody>';$('regTable').innerHTML=h;
+ $('regCards').innerHTML=rows.map(date=>{
+   const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
+   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'
+ }).join('');
+ document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));
+ document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
 function editCell(tr,e){
  const date=tr.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));
  tr.querySelectorAll('[data-f]').forEach(el=>{
    const f=el.dataset.f,v=el.value;
-   if(['in_time','out_time','in_time_2','out_time_2'].includes(f))d[f]=normalize(v);
+   if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f))d[f]=normalize(v);
    else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
    else d[f]=v;
  });
@@ -155,10 +176,10 @@ async function saveAll(){
  try{
   for(const id of dirtyEmployees){const e=emp(id);if(!e)continue;const {error}=await db.from('employees').update({active:e.active,normal_work_minutes:e.normal_work_minutes,break_minutes:e.break_minutes}).eq('id',id);if(error)throw new Error('Employee '+e.name+': '+error.message)}
   for(const category of dirtyRules){const r=ruleFor({category});const {error}=await db.from('category_rules').update({normal_start:r.normal_start,normal_end:r.normal_end,normal_work_minutes:+r.normal_work_minutes||0,break_minutes:+r.break_minutes||0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0}).eq('category',category);if(error)throw new Error('Rule '+category+': '+error.message)}
-  for(const key of dirtyDrafts){const d=drafts.get(key),e=emp(d.id);if(!e)continue;const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2),existing=d.record;
+  for(const key of dirtyDrafts){const d=drafts.get(key),e=emp(d.id);if(!e)continue;const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2),finalOut=normalize(d.final_out),existing=d.record;
    if(!it&&!ot){if(existing){const {error}=await db.from('daily_records').delete().eq('id',existing.id);if(error)throw error}const {error}=await db.from('attendance').delete().eq('work_date',d.date).eq('employee_id',d.id);if(error)throw error;continue}
-   const c=calc(e,{...d,in_time:it,out_time:ot,in_time_2:it2,out_time_2:ot2},d.date),r=ruleFor(e);
-   const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:ot,in_time_2:e.split_shift?it2:null,out_time_2:e.split_shift?ot2:null,break_minutes:r.break_minutes??e.break_minutes??0,normal_work_minutes:r.normal_work_minutes??e.normal_work_minutes??0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0,round_minutes:e.round_minutes||0,full_day_ot:isSunday(d.date)||!!hol(d.date),total_elapsed_minutes:c.elapsed,worked_minutes:c.worked,ut_minutes:d.ut_override!=null?d.ut_override:c.ut,sl_minutes:d.sl_override!=null?d.sl_override:c.sl,ot_minutes:d.ot_override!=null?d.ot_override:c.ot,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
+   const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;const c=calc(e,{...d,in_time:it,out_time:firstOut,in_time_2:secondIn,out_time_2:secondOut,final_out:secondOut},d.date),r=ruleFor(e);
+   const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,break_minutes:e.split_shift?0:(r.break_minutes??e.break_minutes??0),normal_work_minutes:e.split_shift?(e.normal_work_minutes??r.normal_work_minutes??0):(r.normal_work_minutes??e.normal_work_minutes??0),ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0,round_minutes:e.round_minutes||0,full_day_ot:isSunday(d.date)||!!hol(d.date),total_elapsed_minutes:c.elapsed,worked_minutes:c.worked,ut_minutes:d.ut_override!=null?d.ut_override:c.ut,sl_minutes:d.sl_override!=null?d.sl_override:c.sl,ot_minutes:d.ot_override!=null?d.ot_override:c.ot,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
    if(existing){const {error}=await db.from('daily_records').update(p).eq('id',existing.id);if(error)throw error}else{const {error}=await db.from('daily_records').insert({...p,client_id:crypto.randomUUID()});if(error)throw error}
    const {error}=await db.from('attendance').upsert({work_date:d.date,employee_id:d.id,status:d.status||statusFor(e,d.date,d,null),updated_at:new Date().toISOString()},{onConflict:'work_date,employee_id'});if(error)throw error;
   }
