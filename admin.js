@@ -189,7 +189,7 @@ async function saveAll(){
 function exportEmployee(){
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
-   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
    const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Attendance']});
    const personTotals={ot:0,ut:0,sl:0};
    rows.forEach(r=>{
