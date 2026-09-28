@@ -46,7 +46,7 @@ function calc(e,rec,date){
   if(otEligible){
     if(isSunday(date)||hol(date))ot=elapsed;
     else {
-      const normal=e.split_shift?(e.normal_work_minutes||r.normal_work_minutes||0):(r.normal_work_minutes||e.normal_work_minutes||0);
+      const normal=e.normal_work_minutes||r.normal_work_minutes||0;
       if(elapsed>normal+(r.ot_threshold_minutes||0))ot=elapsed-normal;
     }
   }
