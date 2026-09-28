@@ -69,7 +69,7 @@ function rowKey(date,id){return date+'|'+id}
 function getDraft(date,id){
   const key=rowKey(date,id);if(drafts.has(key))return drafts.get(key);
   const r=records.find(x=>x.work_date===date&&x.employee_id===id),a=attendance.find(x=>x.work_date===date&&x.employee_id===id),e=emp(id);
-  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
+  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);if(isVarinder(e)&&r?.ot_minutes!=null)c.ot=Number(r.ot_minutes)||0;const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
   drafts.set(key,d);return d;
 }
 function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
