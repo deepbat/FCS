@@ -34,7 +34,7 @@ function calc(e,rec,date){
   let ot=0;
   if(otEligible){
     if(isSunday(date)||hol(date))ot=elapsed;
-    else if(elapsed>((r.normal_work_minutes||e.normal_work_minutes||0)+(r.ot_threshold_minutes||0)))ot=elapsed-(r.normal_work_minutes||e.normal_work_minutes||0);
+    else {const normal=e.split_shift?(e.normal_work_minutes||r.normal_work_minutes||0):(r.normal_work_minutes||e.normal_work_minutes||0);if(elapsed>(normal+(r.ot_threshold_minutes||0)))ot=elapsed-normal;}
   }
   const worked=e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0));
   return {ut,sl,ot,worked,elapsed};
