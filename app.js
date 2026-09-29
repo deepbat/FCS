@@ -27,6 +27,8 @@ function renderEmployees(){
  $('saveBtn').disabled=!e||saving;
  $('inTime').placeholder=isVarinder(e)?'6:00pm':'9:00';
  $('outTime').placeholder=isVarinder(e)?'8:00am':'5:45';
+ const splitBox=$('secondShift');
+ if(splitBox){splitBox.classList.toggle('hidden',!e?.split_shift||isVarinder(e));}
 }
 async function loadEmployees(){
  $('employeeList').innerHTML='<div class="loading">Loading employees...</div>';$('saveBtn').disabled=true;
@@ -71,17 +73,25 @@ async function syncPending(){
  for(const p of latest.values()){try{await syncOne(p)}catch(e){left.push(p)}}
  saveQueue(left);setSync();
 }
+function clearInputs(){
+ $('inTime').value='';
+ $('outTime').value='';
+ if($('inTime2'))$('inTime2').value='';
+ if($('outTime2'))$('outTime2').value='';
+}
 async function save(){
  if(saving)return;
  const e=selected(),date=$('workDate').value,it=normalize($('inTime').value),out=normalize($('outTime').value);
+ const splitGeneric=!!e?.split_shift&&!isVarinder(e),it2=splitGeneric?normalize($('inTime2')?.value):null,out2=splitGeneric?normalize($('outTime2')?.value):null;
  if(!e||!date)return setMessage('Select employee and date.',true);
  if(!it||!out)return setMessage('Enter valid IN and OUT times.',true);
+ if(splitGeneric&&(!it2||!out2))return setMessage('Enter both second-shift IN and OUT times.',true);
  const varinder=isVarinder(e);
  if(!e.split_shift&&minutes(out)<minutes(it))return setMessage('OUT cannot be earlier than IN.',true);
  saving=true;$('saveBtn').disabled=true;setMessage('Saving...');
  try{
   const holiday=await getHoliday(date),sunday=new Date(date+'T12:00:00').getDay()===0;
-  const firstOut=varinder?'01:00':out,secondIn=varinder?'06:00':null,secondOut=varinder?out:null;
+  const firstOut=varinder?'01:00':out,secondIn=varinder?'06:00':(splitGeneric?it2:null),secondOut=varinder?out:(splitGeneric?out2:null);
   const c=await calculate(e,date,it,firstOut,secondIn,secondOut);
   const record={
    client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
@@ -105,6 +115,8 @@ $('employee').onchange=()=>{clearInputs();renderEmployees();setMessage('')};
 $('saveBtn').onclick=save;
 $('inTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
 $('outTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
+$('inTime2')?.addEventListener('blur',e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value});
+$('outTime2')?.addEventListener('blur',e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value});
 window.addEventListener('online',syncPending);
 (async()=>{setSync();await loadEmployees();await syncPending()})();
 setInterval(()=>{if(queue().length)syncPending()},30000);
