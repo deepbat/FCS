@@ -8,24 +8,32 @@ const getQueue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')
 const setQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));
 let syncing=false,lastSyncError='';
 function updatePending(){const n=getQueue().length;$('pendingCount').textContent=n?n+' pending':'';$('syncStatus').textContent=n?(syncing?'Syncing...':(lastSyncError?'Sync failed':'Pending sync')):'Ready'}
+async function syncOne(p){
+  const record={...p.record};
+  for(const k of ['normal_work_minutes','break_minutes','ot_threshold_minutes','round_minutes','total_elapsed_minutes','worked_minutes','ot_minutes','ut_minutes','sl_minutes']){
+    if(typeof record[k]==='boolean')record[k]=record[k]?1:0;
+  }
+  if(typeof record.ot_eligible==='number')record.ot_eligible=!!record.ot_eligible;
+  if(typeof record.full_day_ot==='number')record.full_day_ot=!!record.full_day_ot;
+  const {data:existing,error:findError}=await db.from('daily_records').select('id').eq('work_date',record.work_date).eq('employee_id',record.employee_id).maybeSingle();
+  if(findError)throw findError;
+  let rr;
+  if(existing){const {client_id,...changes}=record;rr=await db.from('daily_records').update(changes).eq('id',existing.id)}
+  else rr=await db.from('daily_records').insert(record);
+  if(rr.error)throw rr.error;
+  const ar=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});
+  if(ar.error)throw ar.error;
+}
 async function syncQueue(){
   if(syncing)return;
-  const q=getQueue();if(!q.length){updatePending();return}
+  const raw=getQueue();if(!raw.length){updatePending();return}
   syncing=true;updatePending();
+  const latest=new Map();
+  for(const p of raw){const k=p?.record?.work_date+'|'+p?.record?.employee_id;if(p?.record&&p?.attendance&&k!=='undefined|undefined')latest.set(k,p)}
+  const q=[...latest.values()];
   const left=[];lastSyncError='';
   for(const p of q){
-    // Normalize any older queued records created before the integer-field fix.
-    if(p?.record){
-      for(const k of ['normal_work_minutes','break_minutes','ot_threshold_minutes','round_minutes','total_elapsed_minutes','worked_minutes','ot_minutes','ut_minutes','sl_minutes']){
-        if(typeof p.record[k]==='boolean')p.record[k]=p.record[k]?1:0;
-      }
-      if(typeof p.record.ot_eligible==='number')p.record.ot_eligible=!!p.record.ot_eligible;
-      if(typeof p.record.full_day_ot==='number')p.record.full_day_ot=!!p.record.full_day_ot;
-    }
-    let recordOk=false,attendanceOk=false;
-    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'work_date,employee_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
-    try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)lastSyncError=a.error.message;else attendanceOk=true}catch(e){lastSyncError=e?.message||String(e)}
-    if(!recordOk||!attendanceOk)left.push(p);
+    try{await syncOne(p)}catch(e){lastSyncError=e?.message||String(e);left.push(p)}
   }
   setQueue(left);syncing=false;updatePending();if(left.length&&lastSyncError)setMessage('Sync failed: '+lastSyncError,true);
 }
@@ -109,11 +117,10 @@ async function save(){
     worked_minutes:elapsed,sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
-  const result=await db.from('daily_records').upsert(record,{onConflict:'work_date,employee_id'});
-  const ar=await db.from('attendance').upsert(attendancePayload,{onConflict:'work_date,employee_id'});
-  if(result.error||ar.error){
+  try{await syncOne({record,attendance:attendancePayload})}
+  catch(e){
     const q=getQueue();q.push({record,attendance:attendancePayload});setQueue(q);updatePending();
-    clearInputs();setMessage('Saved on this device. It will sync when internet is available.');return
+    clearInputs();setMessage('Saved on this device. It will sync when internet is available.',false);return
   }
   updatePending();clearInputs();setMessage('Saved successfully.');syncQueue();
 }
