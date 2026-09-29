@@ -5,6 +5,8 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
+let employeeMap=new Map(),ruleMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
+let grandTotals={ot:0,ut:0,sl:0}, editSeq=new Map();
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), hasUnsaved=false;
 
@@ -14,10 +16,10 @@ const mins=t=>{if(!t)return null;const p=String(t).slice(0,5).split(':').map(Num
 const time=t=>t?String(t).slice(0,5):'';
 const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
 const range=m=>{const [y,mo]=m.split('-').map(Number),nmo=mo===12?1:mo+1,ny=mo===12?y+1:y;return [m+'-01',ny+'-'+String(nmo).padStart(2,'0')+'-01']};
-function emp(id){return employees.find(e=>e.id===id)}
+function emp(id){return employeeMap.get(id)}
 function hol(date){return holidays.find(h=>h.holiday_date===date)}
 function isSunday(date){return new Date(date+'T12:00:00').getDay()===0}
-function ruleFor(e){return rules.find(r=>r.category===e.category)||{}}
+function ruleFor(e){return ruleMap.get(e.category)||{}}
 function isVarinder(e){return e?.name==='Varinder Pal'&&!!e?.split_shift}
 async function calculate(e,d,date){
   const firstOut=isVarinder(e)?(d.out_time||'01:00'):d.out_time;
@@ -51,7 +53,7 @@ function statusFor(e,date,rec,existing){
 function rowKey(date,id){return date+'|'+id}
 function getDraft(date,id){
   const key=rowKey(date,id);if(drafts.has(key))return drafts.get(key);
-  const r=records.find(x=>x.work_date===date&&x.employee_id===id),a=attendance.find(x=>x.work_date===date&&x.employee_id===id),e=emp(id);
+  const r=recordMap.get(key),a=attendanceMap.get(key),e=emp(id);
   const d={
     date,id,
     in_time:time(r?.in_time),
@@ -78,19 +80,20 @@ function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textConten
 window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
 async function loadData(){
   const [start,end]=range(month);
-  const [er,rr,hr,dr,ar,cr]=await Promise.all([
+  const [er,rr,hr,dr,ar]=await Promise.all([
     db.from('employees').select('*').order('employee_code'),
     db.from('category_rules').select('*').order('category'),
     db.from('holidays').select('*').order('holiday_date'),
     db.from('daily_records').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id'),
-    db.from('attendance').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id'),
-    db.rpc('calculate_attendance_month',{p_start_date:start,p_end_date:end})
+    db.from('attendance').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id')
   ]);
-  if(er.error||rr.error||hr.error||dr.error||ar.error||cr.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error,cr.error].filter(Boolean).map(x=>x.message).join('; '));
-  employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];attendance=ar.data||[];
-  const computed=new Map((cr.data||[]).map(x=>[x.id,x]));
-  records=(dr.data||[]).map(r=>({...r,...(computed.get(r.id)||{})}));
-  drafts.clear();
+  if(er.error||rr.error||hr.error||dr.error||ar.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error].filter(Boolean).map(x=>x.message).join('; '));
+  employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];records=dr.data||[];attendance=ar.data||[];
+  employeeMap=new Map(employees.map(e=>[e.id,e]));
+  ruleMap=new Map(rules.map(r=>[r.category,r]));
+  recordMap=new Map(records.map(r=>[rowKey(r.work_date,r.employee_id),r]));
+  attendanceMap=new Map(attendance.map(a=>[rowKey(a.work_date,a.employee_id),a]));
+  drafts.clear();editSeq.clear();rebuildGrandTotals();
 }
 function shell(user){
 root.innerHTML='<div class="app"><div class="top"><div><h1>FCS Attendance</h1><div class="muted">'+esc(user.email||'')+'</div></div><div><button id="logout" class="btn">Logout</button></div></div><div class="card savebar"><button id="saveAll" class="btn primary">Save Changes</button><span id="saveState" class="saveState">All changes saved</span></div><div class="tabs"><button class="btn active" data-tab="attendance">Attendance</button><button class="btn" data-tab="employees">Employees</button><button class="btn" data-tab="holidays">Holidays</button><button class="btn" data-tab="settings">Settings</button></div><section id="attendanceSection"></section><section id="employeesSection" class="hidden"></section><section id="holidaysSection" class="hidden"></section><section id="settingsSection" class="hidden"></section></div>';
@@ -132,13 +135,15 @@ function renderRegister(){
    const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
    return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'
  }).join('');
- document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>{const isTime=['in_time','out_time','in_time_2','out_time_2','final_out'].includes(el.dataset.f);el.addEventListener('change',()=>editCell(tr,e,el));if(isTime)el.addEventListener('blur',()=>editCell(tr,e,el));}));
+ document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e,el))));
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
 async function editCell(tr,e,changed){
-  const date=tr.dataset.date,d=getDraft(date,e.id);
-  dirtyDrafts.add(rowKey(date,e.id));
+  const date=tr.dataset.date,key=rowKey(date,e.id),d=getDraft(date,e.id);
+  const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
+  const before={ut:d.ut,sl:d.sl,ot:d.ot};
+  dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
   tr.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
@@ -152,34 +157,80 @@ async function editCell(tr,e,changed){
     d.ut_override=null;d.sl_override=null;d.ot_override=null;
     try{
       const c=await calculate(e,d,date);
+      if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
-    }catch(err){markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}}
+    }catch(err){
+      if(editSeq.get(key)!==seq)return;
+      markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
+    }
     return;
   }
-  markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
+  adjustGrandTotals(before,d);markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
 function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
-function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl)}
-function totalsForAll(){let ot=0,ut=0,sl=0;const rows=datesForMonth();employees.filter(e=>e.active).forEach(e=>rows.forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0}));return {ot,ut,sl}}
-function updateGrandTotal(){const x=$('grandTotal');if(!x)return;const t=totalsForAll();x.textContent='Grand Total (All People):  OT '+fmtMin(t.ot)+'   UT '+fmtMin(t.ut)+'   SL '+fmtMin(t.sl)}
+function updateRegSummary(e,rows){
+  let ot=0,ut=0,sl=0;
+  rows.forEach(date=>{const x=getDraft(date,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});
+  $('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl);
+}
+function rebuildGrandTotals(){
+  grandTotals={ot:0,ut:0,sl:0};
+  records.forEach(r=>{
+    grandTotals.ot+=Number(r.ot_minutes)||0;
+    grandTotals.ut+=Number(r.ut_minutes)||0;
+    grandTotals.sl+=Number(r.sl_minutes)||0;
+  });
+  drafts.forEach(d=>{
+    const r=d.record;
+    if(r){
+      grandTotals.ot+=d.ot-(Number(r.ot_minutes)||0);
+      grandTotals.ut+=d.ut-(Number(r.ut_minutes)||0);
+      grandTotals.sl+=d.sl-(Number(r.sl_minutes)||0);
+    }else{
+      grandTotals.ot+=d.ot;grandTotals.ut+=d.ut;grandTotals.sl+=d.sl;
+    }
+  });
+}
+function adjustGrandTotals(before,d){
+  grandTotals.ot+=(Number(d.ot)||0)-(Number(before.ot)||0);
+  grandTotals.ut+=(Number(d.ut)||0)-(Number(before.ut)||0);
+  grandTotals.sl+=(Number(d.sl)||0)-(Number(before.sl)||0);
+}
+function updateGrandTotal(){
+  const x=$('grandTotal');if(!x)return;
+  x.textContent='Grand Total (All People):  OT '+fmtMin(grandTotals.ot)+'   UT '+fmtMin(grandTotals.ut)+'   SL '+fmtMin(grandTotals.sl);
+}
 async function editCard(card,e){
-  const date=card.dataset.date,d=getDraft(date,e.id);
-  dirtyDrafts.add(rowKey(date,e.id));
+  const date=card.dataset.date,key=rowKey(date,e.id),d=getDraft(date,e.id);
+  const before={ut:d.ut,sl:d.sl,ot:d.ot};
+  dirtyDrafts.add(key);
   let timeChanged=false;
   card.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
-    if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;timeChanged=true}
-    else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
-    else d[f]=v
+    if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){
+      d[f]=normalize(v);el.value=d[f]||'';timeChanged=true;
+    }else if(['ut','sl','ot'].includes(f)){
+      if(timeChanged)return;
+      const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
+    }else d[f]=v;
   });
   if(timeChanged){
+    d.ut_override=null;d.sl_override=null;d.ot_override=null;
     try{
       const c=await calculate(e,d,date);
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
     }catch(err){markUnsaved();return}
   }
-  markUnsaved();renderRegister();
+  adjustGrandTotals(before,d);markUnsaved();
+  card.querySelectorAll('[data-f]').forEach(el=>{
+    if(el.dataset.f==='ut')el.value=fmtMin(d.ut);
+    if(el.dataset.f==='sl')el.value=fmtMin(d.sl);
+    if(el.dataset.f==='ot')el.value=fmtMin(d.ot);
+  });
+  card.className='regCard '+(d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'');
+  updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
@@ -219,6 +270,7 @@ async function saveAll(){
  }catch(err){s.textContent='Save failed: '+err.message;s.className='saveState error';markUnsaved()}
 }
 function exportEmployee(){
+ if(hasUnsaved){alert('Please save changes before exporting payroll data.');return}
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
    const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
@@ -243,7 +295,7 @@ function exportEmployee(){
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
  });
- const totals=totalsForAll();
+ const totals=grandTotals;
  const grandRows=employees.filter(e=>e.active).map(e=>{let ot=0,ut=0,sl=0;datesForMonth().forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0});return {Employee:e.name,OT:fmtMin(ot),UT:fmtMin(ut),SL:fmtMin(sl)}});
  grandRows.push({Employee:'GRAND TOTAL',OT:fmtMin(totals.ot),UT:fmtMin(totals.ut),SL:fmtMin(totals.sl)});
  const totalWs=XLSX.utils.json_to_sheet(grandRows,{header:['Employee','OT','UT','SL']});
