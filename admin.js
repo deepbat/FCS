@@ -48,8 +48,11 @@ function calc(e,rec,date){
   if(otEligible){
     if(isSunday(date)||hol(date))ot=elapsed;
     else {
-      const normal=e.normal_work_minutes||r.normal_work_minutes||0;
-      if(elapsed>normal+(r.ot_threshold_minutes||0))ot=elapsed-normal;
+      const normalEnd=mins(r.normal_end)||((e.normal_work_minutes||r.normal_work_minutes||0)+(mins(r.normal_start)||540));
+      let finish=mins(rec.out_time);
+      if(finish<540)finish+=1440;
+      const extra=Math.max(0,finish-normalEnd);
+      if(extra>(r.ot_threshold_minutes||0))ot=extra;
     }
   }
   const worked=e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0));
