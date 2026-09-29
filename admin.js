@@ -131,7 +131,7 @@ function renderRegister(){
    const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
    return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'
  }).join('');
- document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e))));
+ document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>{el.addEventListener('change',()=>editCell(tr,e));if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(el.dataset.f))el.addEventListener('blur',()=>editCell(tr,e));}));
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
@@ -139,7 +139,7 @@ function editCell(tr,e){
  const date=tr.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));
  tr.querySelectorAll('[data-f]').forEach(el=>{
    const f=el.dataset.f,v=el.value;
-   if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;}
+   if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);el.value=d[f]||'';d.ut_override=null;d.sl_override=null;d.ot_override=null;}
    else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
    else d[f]=v;
  });
