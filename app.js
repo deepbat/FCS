@@ -77,7 +77,17 @@ async function save(){
   const normal=e.normal_work_minutes||rule.normal_work_minutes||0;
   const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(rule.normal_start?minutes(rule.normal_start):540);
   const sl=!e.split_shift&&!sunday&&!holiday?Math.max(0,minutes(it)-start):0;
-  const ot=rule.ot_eligible?((sunday||holiday)?elapsed:(elapsed>normal+(rule.ot_threshold_minutes||0)?elapsed-normal:0)):0;
+  let ot=0;
+  if(rule.ot_eligible){
+   if(sunday||holiday) ot=elapsed;
+   else if(e.split_shift) ot=elapsed>normal+(rule.ot_threshold_minutes||0)?elapsed-normal:0;
+   else {
+    const normalEnd=rule.normal_end?minutes(rule.normal_end):(normal+(rule.normal_start?minutes(rule.normal_start):540));
+    let finish=minutes(out);if(finish<540)finish+=1440;
+    const extra=Math.max(0,finish-normalEnd);
+    ot=extra>(rule.ot_threshold_minutes||0)?extra:0;
+   }
+  }
   const record={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,ot_eligible:!!rule.ot_eligible,ot_threshold_minutes:rule.ot_threshold_minutes||15,round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||holiday),total_elapsed_minutes:elapsed,worked_minutes:e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0)),sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()};
   const attendance={work_date:date,employee_id:e.id,status:sunday?'Sunday':holiday?'Holiday':'Present',updated_at:new Date().toISOString()};
   try{await syncOne({record,attendance});setMessage('Saved successfully.');clearInputs()}
