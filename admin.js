@@ -5,6 +5,7 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
+const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), hasUnsaved=false;
 
 const fmtDate=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
@@ -12,7 +13,6 @@ const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return Math.floor(n/60)+
 const mins=t=>{if(!t)return null;const p=String(t).slice(0,5).split(':').map(Number);return p[0]*60+p[1]};
 const time=t=>t?String(t).slice(0,5):'';
 const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
-const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const range=m=>{const [y,mo]=m.split('-').map(Number),nmo=mo===12?1:mo+1,ny=mo===12?y+1:y;return [m+'-01',ny+'-'+String(nmo).padStart(2,'0')+'-01']};
 function emp(id){return employees.find(e=>e.id===id)}
 function hol(date){return holidays.find(h=>h.holiday_date===date)}
