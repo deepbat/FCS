@@ -87,9 +87,11 @@ function updateTotals(e,dates){let ot=0,ut=0,sl=0;dates.forEach(d=>{const r=getR
 function saveAdmin(){const rows=Array.from(state.dirty.values());if(!rows.length)return $('as').textContent='No changes';$('as').textContent='Saving...';google.script.run.withSuccessHandler(()=>{$('as').textContent='Saved';rows.forEach(r=>{const i=state.data.attendance.findIndex(x=>x.key===r.key);if(i>=0)state.data.attendance[i]=r;else state.data.attendance.push(r)});state.dirty.clear()}).withFailureHandler(e=>$('as').textContent=e.message||String(e)).saveAttendanceRows(rows,'admin',state.pin)}
 function prevPerson(n){const emps=state.data.employees.filter(x=>String(x.active)!=='false');state.activeEmployee=(state.activeEmployee+n+emps.length)%emps.length;renderRegister()}
 function exportExcel(){
- if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return}
- const wb=XLSX.utils.book_new(),emps=state.data.employees.filter(x=>String(x.active)!=='false'),dates=monthDates(state.month);
- emps.forEach(e=>{const rows=[['Date','IN','UT','OUT','SL','OT','Attendance']];dates.forEach(d=>{const r=getRow(d,e),s=statusFor(e,r,d);rows.push([d.split('-').reverse().join('/'),r.in_time||'',fmt(r.ut_minutes),r.out_time||'',fmt(r.sl_minutes),fmt(r.ot_minutes),s])});const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}];XLSX.utils.book_append_sheet(wb,ws,e.name.slice(0,31))});XLSX.writeFile(wb,'FCS_Attendance_'+state.month+'.xlsx')}
+ $('as').textContent='Creating Excel file...';
+ google.script.run.withSuccessHandler(r=>{window.open(r.url,'_blank');$('as').textContent='Excel file created';})
+ .withFailureHandler(e=>{$('as').textContent=e.message||String(e)})
+ .exportExcelFile(state.month,state.role,state.pin)
+}
 function init(){state.role=q('mode')==='admin'?'admin':'gate';if(!state.pin)renderLogin()}
 window.addEventListener('load',init);
 </script>
