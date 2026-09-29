@@ -21,7 +21,7 @@ async function syncQueue(){
       }
     }
     let recordOk=false,attendanceOk=false;
-    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
+    try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'work_date,employee_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
     try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)lastSyncError=a.error.message;else attendanceOk=true}catch(e){lastSyncError=e?.message||String(e)}
     if(!recordOk||!attendanceOk)left.push(p);
   }
@@ -107,7 +107,7 @@ async function save(){
     worked_minutes:elapsed,sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
-  const result=await db.from('daily_records').upsert(record,{onConflict:'client_id'});
+  const result=await db.from('daily_records').upsert(record,{onConflict:'work_date,employee_id'});
   const ar=await db.from('attendance').upsert(attendancePayload,{onConflict:'work_date,employee_id'});
   if(result.error||ar.error){
     const q=getQueue();q.push({record,attendance:attendancePayload});setQueue(q);updatePending();
