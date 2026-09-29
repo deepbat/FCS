@@ -231,7 +231,6 @@ async function editCard(card,e,changed){
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
-      adjustGrandTotals(before,d);
     }catch(err){
       if(editSeq.get(key)!==seq)return;
       markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
