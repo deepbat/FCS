@@ -5,7 +5,6 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
-let recordByKey=new Map(),attendanceByKey=new Map(),editSeq=new Map();
 let employeeMap=new Map(),ruleMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
 let grandTotals={ot:0,ut:0,sl:0}, editSeq=new Map();
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
@@ -137,7 +136,7 @@ function renderRegister(){
    return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div></div>'
  }).join('');
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e,el))));
- document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
+ document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e,el))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
 async function editCell(tr,e,changed){
@@ -168,7 +167,7 @@ async function editCell(tr,e,changed){
   }
   markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
-function renderRowValues(tr,d)(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
+function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
 function updateRegSummary(e,rows){
   let ot=0,ut=0,sl=0;
   rows.forEach(date=>{const x=getDraft(date,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});
