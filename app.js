@@ -38,7 +38,7 @@ function renderEmployees(){
  }
 }
 async function loadEmployees(){
- $('employeeList').innerHTML='<div class="loading">Loading employees...</div>';$('saveBtn').disabled=true;
+ $('saveBtn').disabled=true;
  const {data,error}=await db.from('employees').select('*').eq('active',true).order('employee_code');
  if(error){employees=[];setMessage('Could not load employees: '+error.message,true);return}
  employees=data||[];renderEmployees();setSync();
