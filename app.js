@@ -15,13 +15,11 @@ async function syncOne(p){
   }
   if(typeof record.ot_eligible==='number')record.ot_eligible=!!record.ot_eligible;
   if(typeof record.full_day_ot==='number')record.full_day_ot=!!record.full_day_ot;
-  const {data:existing,error:findError}=await db.from('daily_records').select('id').eq('work_date',record.work_date).eq('employee_id',record.employee_id).maybeSingle();
-  if(findError)throw findError;
-  let rr;
-  if(existing){const {client_id,...changes}=record;rr=await db.from('daily_records').update(changes).eq('id',existing.id)}
-  else rr=await db.from('daily_records').insert(record);
+  const [rr,ar]=await Promise.all([
+    db.from('daily_records').upsert(record,{onConflict:'work_date,employee_id'}),
+    db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'})
+  ]);
   if(rr.error)throw rr.error;
-  const ar=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});
   if(ar.error)throw ar.error;
 }
 async function syncQueue(){
@@ -40,7 +38,7 @@ async function syncQueue(){
 window.addEventListener('online',()=>syncQueue());
 window.addEventListener('focus',()=>syncQueue());
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncQueue()});
-setInterval(()=>{if(getQueue().length)syncQueue()},10000);
+setInterval(()=>{if(getQueue().length)syncQueue()},30000);
 
 function today(){
   const d=new Date(); return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -108,11 +106,13 @@ async function save(){
     }
     const sunday=new Date(date+'T12:00:00').getDay()===0;
     let status=sunday?'Sunday':'Present';
-    const hr=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
+    const [hr,rr]=await Promise.all([
+      db.from('holidays').select('id').eq('holiday_date',date).maybeSingle(),
+      db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes,normal_start').eq('category',e.category).maybeSingle()
+    ]);
     if(hr.error)throw hr.error;
-    if(hr.data)status='Holiday';
-    const rr=await db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes,normal_start').eq('category',e.category).maybeSingle();
     if(rr.error)throw rr.error;
+    if(hr.data)status='Holiday';
     const rule=rr.data||{};
     const normal=e.normal_work_minutes||rule.normal_work_minutes||0;
     const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(rule.normal_start?minutes(rule.normal_start):540);
