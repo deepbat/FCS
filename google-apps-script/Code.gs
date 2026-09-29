@@ -264,7 +264,7 @@ function supabaseGetAll_(url,key,table) {
   const out=[]; let offset=0; const page=1000;
   while(true) {
     const endpoint=url.replace(/\/$/,'')+'/rest/v1/'+table+'?select=*&limit='+page+'&offset='+offset;
-    const res=UrlFetchApp.fetch(endpoint,{method:'get',headers:{apikey:key,Authorization:'Bearer '+key},muteHttpExceptions:true});
+    const res=UrlFetchApp.fetch(endpoint,{method:'get',headers:{apikey:key},muteHttpExceptions:true});
     const code=res.getResponseCode();
     if(code<200||code>=300) throw new Error('Supabase '+table+' returned HTTP '+code+': '+res.getContentText());
     const data=JSON.parse(res.getContentText());
