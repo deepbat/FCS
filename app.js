@@ -14,6 +14,12 @@ async function syncQueue(){
   syncing=true;updatePending();
   const left=[];lastSyncError='';
   for(const p of q){
+    // Normalize any older queued records created before the integer-field fix.
+    if(p?.record){
+      for(const k of ['normal_work_minutes','break_minutes','ot_threshold_minutes','round_minutes','total_elapsed_minutes','worked_minutes','ot_minutes','ut_minutes','sl_minutes']){
+        if(typeof p.record[k]==='boolean')p.record[k]=p.record[k]?1:0;
+      }
+    }
     let recordOk=false,attendanceOk=false;
     try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'client_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
     try{const a=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});if(a.error)lastSyncError=a.error.message;else attendanceOk=true}catch(e){lastSyncError=e?.message||String(e)}
