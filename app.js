@@ -34,12 +34,24 @@ async function loadEmployees(){
  if(error){employees=[];setMessage('Could not load employees: '+error.message,true);return}
  employees=data||[];renderEmployees();setSync();
 }
-async function getRule(e){
- const [h,r]=await Promise.all([
-  db.from('holidays').select('id').eq('holiday_date',$('workDate').value).maybeSingle(),
-  db.from('category_rules').select('ot_eligible,ot_threshold_minutes,normal_work_minutes,normal_start').eq('category',e.category).maybeSingle()
- ]);
- if(h.error)throw h.error;if(r.error)throw r.error;return {holiday:!!h.data,rule:r.data||{}};
+async function getHoliday(date){
+ const {data,error}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
+ if(error)throw error;
+ return !!data;
+}
+async function calculate(e,date,it,firstOut,secondIn=null,secondOut=null){
+ const {data,error}=await db.rpc('calculate_attendance',{
+   p_employee_id:e.id,
+   p_work_date:date,
+   p_in_time:it,
+   p_out_time:firstOut,
+   p_in_time_2:secondIn,
+   p_out_time_2:secondOut
+ });
+ if(error)throw error;
+ const c=Array.isArray(data)?data[0]:data;
+ if(!c)throw new Error('No calculation returned.');
+ return c;
 }
 async function syncOne(p){
  const record={...p.record};
@@ -68,27 +80,20 @@ async function save(){
  if(!e.split_shift&&minutes(out)<minutes(it))return setMessage('OUT cannot be earlier than IN.',true);
  saving=true;$('saveBtn').disabled=true;setMessage('Saving...');
  try{
-  const {holiday,rule}=await getRule(e),sunday=new Date(date+'T12:00:00').getDay()===0;
+  const holiday=await getHoliday(date),sunday=new Date(date+'T12:00:00').getDay()===0;
   const firstOut=varinder?'01:00':out,secondIn=varinder?'06:00':null,secondOut=varinder?out:null;
-  let elapsed;
-  if(e.split_shift){elapsed=minutes(firstOut)-minutes(it);if(elapsed<0)elapsed+=1440;elapsed+=minutes(secondOut)-minutes(secondIn);if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes}
-  else elapsed=minutes(out)-minutes(it);
-  if(elapsed<0)elapsed+=1440;
-  const normal=e.normal_work_minutes||rule.normal_work_minutes||0;
-  const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(rule.normal_start?minutes(rule.normal_start):540);
-  const sl=!e.split_shift&&!sunday&&!holiday?Math.max(0,minutes(it)-start):0;
-  let ot=0;
-  if(rule.ot_eligible){
-   if(sunday||holiday) ot=elapsed;
-   else if(e.split_shift) ot=elapsed>normal+(rule.ot_threshold_minutes||0)?elapsed-normal:0;
-   else {
-    const normalEnd=rule.normal_end?minutes(rule.normal_end):(normal+(rule.normal_start?minutes(rule.normal_start):540));
-    let finish=minutes(out);if(finish<540)finish+=1440;
-    const extra=Math.max(0,finish-normalEnd);
-    ot=extra>(rule.ot_threshold_minutes||0)?extra:0;
-   }
-  }
-  const record={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,ot_eligible:!!rule.ot_eligible,ot_threshold_minutes:rule.ot_threshold_minutes||15,round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||holiday),total_elapsed_minutes:elapsed,worked_minutes:e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0)),sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()};
+  const c=await calculate(e,date,it,firstOut,secondIn,secondOut);
+  const record={
+   client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
+   in_time:it,out_time:firstOut,
+   in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
+   break_minutes:c.break_minutes,normal_work_minutes:c.normal_work_minutes,
+   ot_eligible:c.ot_eligible,ot_threshold_minutes:c.ot_threshold_minutes,
+   round_minutes:c.round_minutes,full_day_ot:c.full_day_ot,
+   total_elapsed_minutes:c.total_elapsed_minutes,worked_minutes:c.worked_minutes,
+   ut_minutes:c.ut_minutes,sl_minutes:c.sl_minutes,ot_minutes:c.ot_minutes,
+   updated_at:new Date().toISOString()
+  };
   const attendance={work_date:date,employee_id:e.id,status:sunday?'Sunday':holiday?'Holiday':'Present',updated_at:new Date().toISOString()};
   try{await syncOne({record,attendance});setMessage('Saved successfully.');clearInputs()}
   catch(err){const q=queue();q.push({record,attendance});saveQueue(q);setSync();clearInputs();setMessage('Saved on this phone. Sync pending.',true)}
