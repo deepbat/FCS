@@ -91,7 +91,7 @@ async function save(){
   const normal=e.normal_work_minutes||rule?.normal_work_minutes||0;
   const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(rule?.normal_start?minutes(rule.normal_start):540);
   const sl=!e.split_shift&&!sunday&&!hol?Math.max(0,minutes(it)-start):0;
-  const ot=rule?.ot_eligible&&((sunday||hol)?elapsed:elapsed>(normal+(rule?.ot_threshold_minutes||0))?elapsed-normal:0);
+  const ot=rule?.ot_eligible?((sunday||hol)?elapsed:elapsed>(normal+(rule?.ot_threshold_minutes||0))?elapsed-normal:0):0;
   const record={
     client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
     in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
