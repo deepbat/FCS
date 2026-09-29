@@ -21,14 +21,16 @@ const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pend
 function selected(){return employees.find(e=>e.id===$('employee').value)}
 function isVarinder(e){return e?.name==='Varinder Pal'&&e?.split_shift}
 function renderEmployees(){
- const e=selected();
+ const current=$('employee').value;
  $('employee').innerHTML=employees.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join('');
- if(e)$('employee').value=e.id;
+ if(current&&employees.some(x=>String(x.id)===current))$('employee').value=current;
+ else if(employees[0])$('employee').value=employees[0].id;
+ const e=selected();
  $('saveBtn').disabled=!e||saving;
  $('inTime').placeholder=isVarinder(e)?'6:00pm':'9:00';
  $('outTime').placeholder=isVarinder(e)?'8:00am':'5:45';
  const splitBox=$('secondShift');
- if(splitBox){splitBox.classList.toggle('hidden',!e?.split_shift||isVarinder(e));}
+ if(splitBox)splitBox.classList.toggle('hidden',!e?.split_shift||isVarinder(e));
 }
 async function loadEmployees(){
  $('employeeList').innerHTML='<div class="loading">Loading employees...</div>';$('saveBtn').disabled=true;
