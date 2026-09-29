@@ -1,38 +1,16 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111827">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="styles.css">
-<title>FCS Attendance</title>
-</head>
-<body>
-<main class="app">
-<header class="topbar">
-  <div><h1>FCS Attendance</h1><p>Daily register entry</p></div>
-  <a class="ghost" href="./admin.html">Admin</a>
-</header>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#17324d"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><title>FCS Attendance</title></head>
+<body><main class="app">
+<header class="topbar"><div><h1>FCS Attendance</h1><p>Daily register entry</p></div><a class="ghost" href="./admin.html">Admin</a></header>
 <section class="card gate-card">
-  <div class="syncbar"><span id="syncStatus">Ready</span><span id="pendingCount"></span></div>
-  <label>Date</label><input id="workDate" type="date">
-  <label>Employee</label><select id="employee"></select>
-  <div class="timegrid">
-    <div><label>IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="5" placeholder="9:00" autocomplete="off"></div>
-    <div><label>OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="5" placeholder="5:45" autocomplete="off"></div>
-  </div>
-  <div id="splitFields" class="timegrid hidden">
-    <div><label>IN 2</label><input id="inTime2" type="text" inputmode="numeric" maxlength="5" placeholder="6:00" autocomplete="off"></div>
-    <div><label>OUT 2</label><input id="outTime2" type="text" inputmode="numeric" maxlength="5" placeholder="7:00" autocomplete="off"></div>
-  </div>
-  <button id="saveBtn" class="primary">Save</button>
-  <p id="message" class="message"></p>
+<div class="syncbar"><span id="syncStatus">Ready</span></div>
+<label>Date</label><input id="workDate" type="date">
+<label>Employee</label><div id="employeeList" class="employeeList"></div>
+<div class="selectedEmployee"><span>Selected</span><strong id="selectedName">Select employee</strong></div>
+<div class="timegrid"><div><label>IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="7" placeholder="9:00" autocomplete="off"></div><div><label>OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="7" placeholder="5:45" autocomplete="off"></div></div>
+<button id="saveBtn" class="primary">Save</button><p id="message" class="message"></p>
 </section>
 <p class="smallnote">Enter timings from the physical register. Previous entries are not displayed here.</p>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260929-08"></script>
-</body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20260929-09"></script>
+</body></html>
