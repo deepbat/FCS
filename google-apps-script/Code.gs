@@ -274,3 +274,58 @@ function supabaseGetAll_(url,key,table) {
   }
   return out;
 }
+
+
+function exportExcelFile(month, role, pin) {
+  authorize_(role, pin);
+  const ss = getSpreadsheet_();
+  const employees = readObjects_(ss.getSheetByName(SHEETS.employees)).filter(e => String(e.active) !== 'false');
+  const attendance = readObjects_(ss.getSheetByName(SHEETS.attendance));
+  const holidays = readObjects_(ss.getSheetByName(SHEETS.holidays));
+  const dates = monthDatesServer_(month);
+  const temp = SpreadsheetApp.create('FCS Attendance Export ' + month + ' ' + new Date().getTime());
+  const first = temp.getSheets()[0];
+  employees.forEach((e, index) => {
+    const sh = index === 0 ? first : temp.insertSheet();
+    sh.setName(String(e.name).slice(0, 31));
+    const rows = [['Date','IN','UT','OUT','SL','OT','Attendance']];
+    dates.forEach(d => {
+      const key = d + '|' + e.employee_code;
+      const r = attendance.find(x => String(x.key) === key) || {};
+      rows.push([d.split('-').reverse().join('/'), r.in_time || '', formatMinutesServer_(r.ut_minutes), r.out_time || '', formatMinutesServer_(r.sl_minutes), formatMinutesServer_(r.ot_minutes), r.attendance || '']);
+    });
+    sh.getRange(1,1,rows.length,rows[0].length).setValues(rows);
+    sh.setFrozenRows(1);
+    sh.getRange(1,1,1,7).setFontWeight('bold');
+    sh.autoResizeColumns(1,7);
+  });
+  SpreadsheetApp.flush();
+
+  const exportUrl = 'https://docs.google.com/spreadsheets/d/' + temp.getId() + '/export?format=xlsx';
+  const response = UrlFetchApp.fetch(exportUrl, {
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()},
+    muteHttpExceptions: true
+  });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    DriveApp.getFileById(temp.getId()).setTrashed(true);
+    throw new Error('Excel export failed: HTTP ' + response.getResponseCode());
+  }
+  const file = DriveApp.createFile(response.getBlob().setName('FCS_Attendance_' + month + '.xlsx'));
+  DriveApp.getFileById(temp.getId()).setTrashed(true);
+  return {url: file.getUrl(), name: file.getName()};
+}
+
+function monthDatesServer_(month) {
+  const [y,m] = String(month).split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const out = [];
+  for (let d=1; d<=days; d++) out.push(month + '-' + String(d).padStart(2,'0'));
+  return out;
+}
+
+function formatMinutesServer_(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
+  return Math.floor(Math.max(0,n)/60) + 'h ' + String(Math.round(Math.max(0,n)%60)).padStart(2,'0') + 'm';
+}
