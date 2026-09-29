@@ -5,6 +5,7 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
+let recordByKey=new Map(),attendanceByKey=new Map(),editSeq=new Map();
 let employeeMap=new Map(),ruleMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
 let grandTotals={ot:0,ut:0,sl:0}, editSeq=new Map();
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
@@ -113,7 +114,7 @@ function monthToolbar(){
 return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
 }
 function datesForMonth(){
- const [start,end]=range(month);const today=new Date().toISOString().slice(0,10);const currentMonth=new Date().toISOString().slice(0,7);
+ const [start,end]=range(month);
  let cutoff=end;
  const out=[];let d=new Date(start+'T12:00:00'),z=new Date(cutoff+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
 }
@@ -140,14 +141,13 @@ function renderRegister(){
  updateRegSummary(e,rows);updateGrandTotal();
 }
 async function editCell(tr,e,changed){
-  const date=tr.dataset.date,key=rowKey(date,e.id),d=getDraft(date,e.id);
+  const date=tr.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
-  const before={ut:d.ut,sl:d.sl,ot:d.ot};
   dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
   tr.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
-    if(timeFields.includes(f)){d[f]=normalize(v);el.value=d[f]||'';}
+    if(timeFields.includes(f)){d[f]=normalize(v);el.value=d[f]||''}
     else if(['ut','sl','ot'].includes(f)){
       if(timeChanged)return;
       const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
@@ -159,7 +159,6 @@ async function editCell(tr,e,changed){
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
-      adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
     }catch(err){
       if(editSeq.get(key)!==seq)return;
@@ -167,9 +166,9 @@ async function editCell(tr,e,changed){
     }
     return;
   }
-  adjustGrandTotals(before,d);markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
+  markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
-function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
+function renderRowValues(tr,d)(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
 function updateRegSummary(e,rows){
   let ot=0,ut=0,sl=0;
   rows.forEach(date=>{const x=getDraft(date,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});
@@ -202,35 +201,43 @@ function updateGrandTotal(){
   const x=$('grandTotal');if(!x)return;
   x.textContent='Grand Total (All People):  OT '+fmtMin(grandTotals.ot)+'   UT '+fmtMin(grandTotals.ut)+'   SL '+fmtMin(grandTotals.sl);
 }
-async function editCard(card,e){
-  const date=card.dataset.date,key=rowKey(date,e.id),d=getDraft(date,e.id);
-  const before={ut:d.ut,sl:d.sl,ot:d.ot};
+function updateCardValues(card,e,d){
+  const cls=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
+  card.className='regCard '+cls;
+  card.querySelector('[data-f="status"]').value=d.status||'';
+  ['in_time','out_time','in_time_2','out_time_2','final_out'].forEach(f=>{const x=card.querySelector('[data-f="'+f+'"]');if(x)x.value=normalize(d[f])||''});
+  ['ut','sl','ot'].forEach(f=>{const x=card.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])});
+}
+async function editCard(card,e,changed){
+  const date=card.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
+  const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
   dirtyDrafts.add(key);
-  let timeChanged=false;
+  const timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'];
+  const timeChanged=timeFields.includes(changed?.dataset?.f);
   card.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
-    if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){
-      d[f]=normalize(v);el.value=d[f]||'';timeChanged=true;
-    }else if(['ut','sl','ot'].includes(f)){
+    if(timeFields.includes(f))d[f]=normalize(v);
+    else if(['ut','sl','ot'].includes(f)){
       if(timeChanged)return;
       const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
-    }else d[f]=v;
+    } else d[f]=v;
   });
   if(timeChanged){
     d.ut_override=null;d.sl_override=null;d.ot_override=null;
     try{
       const c=await calculate(e,d,date);
+      if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
-    }catch(err){markUnsaved();return}
+    }catch(err){
+      if(editSeq.get(key)!==seq)return;
+      markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
+      return;
+    }
   }
-  adjustGrandTotals(before,d);markUnsaved();
-  card.querySelectorAll('[data-f]').forEach(el=>{
-    if(el.dataset.f==='ut')el.value=fmtMin(d.ut);
-    if(el.dataset.f==='sl')el.value=fmtMin(d.sl);
-    if(el.dataset.f==='ot')el.value=fmtMin(d.ot);
-  });
-  card.className='regCard '+(d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'');
-  updateRegSummary(e,datesForMonth());updateGrandTotal();
+  markUnsaved();
+  updateCardValues(card,e,d);
+  updateRegSummary(e,datesForMonth());
+  updateGrandTotal();
 }
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
