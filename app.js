@@ -3,7 +3,7 @@ const SUPABASE_KEY='sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const QUEUE_KEY='fcs-attendance-pending-v3';
-let employees=[],selectedEmployee=null,saving=false;
+let employees=[],saving=false;
 
 const queue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')}catch{return[]}};
 const saveQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));
@@ -18,19 +18,21 @@ const normalize=v=>{
 const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').className='message '+(error?'error':'ok')};
 const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pending sync':'Ready'};
 
-function selected(){return employees.find(e=>e.id===selectedEmployee)}
+function selected(){return employees.find(e=>e.id===$('employee').value)}
 function isVarinder(e){return e?.name==='Varinder Pal'&&e?.split_shift}
-function setEmployees(){
- $('employeeList').innerHTML=employees.map(e=>'<button type="button" class="employeeBtn '+(e.id===selectedEmployee?'selected':'')+'" data-id="'+e.id+'">'+e.name+'</button>').join('');
- document.querySelectorAll('.employeeBtn').forEach(b=>b.onclick=()=>{selectedEmployee=b.dataset.id;clearInputs();renderEmployees();setMessage('')});
+function renderEmployees(){
+ const e=selected();
+ $('employee').innerHTML=employees.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join('');
+ if(e)$('employee').value=e.id;
+ $('saveBtn').disabled=!e||saving;
+ $('inTime').placeholder=isVarinder(e)?'6:00pm':'9:00';
+ $('outTime').placeholder=isVarinder(e)?'8:00am':'5:45';
 }
-function renderEmployees(){setEmployees();const e=selected();$('selectedName').textContent=e?e.name:'Select employee';$('saveBtn').disabled=!e||saving;$('inTime').placeholder=isVarinder(e)?'6:00pm':'9:00';$('outTime').placeholder=isVarinder(e)?'8:00am':'5:45'}
-function clearInputs(){$('inTime').value='';$('outTime').value='';}
 async function loadEmployees(){
  $('employeeList').innerHTML='<div class="loading">Loading employees...</div>';$('saveBtn').disabled=true;
  const {data,error}=await db.from('employees').select('*').eq('active',true).order('employee_code');
  if(error){employees=[];setMessage('Could not load employees: '+error.message,true);return}
- employees=data||[];selectedEmployee=employees[0]?.id||null;renderEmployees();setSync();
+ employees=data||[];renderEmployees();setSync();
 }
 async function getRule(e){
  const [h,r]=await Promise.all([
@@ -84,6 +86,7 @@ async function save(){
  finally{saving=false;$('saveBtn').disabled=!selected()}
 }
 $('workDate').value=today();
+$('employee').onchange=()=>{clearInputs();renderEmployees();setMessage('')};
 $('saveBtn').onclick=save;
 $('inTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
 $('outTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
