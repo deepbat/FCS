@@ -96,8 +96,8 @@ async function save(){
     client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
     in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
     break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,
-    ot_eligible:!!rule?.ot_eligible,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
-    round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||hol),total_elapsed_minutes:elapsed,
+    ot_eligible:rule?.ot_eligible?1:0,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
+    round_minutes:e.round_minutes||0,full_day_ot:(sunday||hol)?1:0,total_elapsed_minutes:elapsed,
     worked_minutes:elapsed,sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
