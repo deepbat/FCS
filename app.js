@@ -87,6 +87,7 @@ async function save(){
  if(!it||!out)return setMessage('Enter valid IN and OUT times.',true);
  if(splitGeneric&&(!it2||!out2))return setMessage('Enter both second-shift IN and OUT times.',true);
  const varinder=isVarinder(e);
+ if(e.split_shift&&!varinder)return setMessage('Split-shift employee attendance must be entered in Admin.',true);
  if(!e.split_shift&&minutes(out)<minutes(it))return setMessage('OUT cannot be earlier than IN.',true);
  saving=true;$('saveBtn').disabled=true;setMessage('Saving...');
  try{
