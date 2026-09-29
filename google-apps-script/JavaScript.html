@@ -1,0 +1,95 @@
+<script>
+const state={role:null,pin:null,data:null,month:'2026-09',activeEmployee:0,dirty:new Map(),pendingKey:'fcs-attendance-pending-v1'};
+const $=id=>document.getElementById(id);
+
+function q(name){return new URLSearchParams(location.search).get(name)}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function mins(v){if(v===null||v===undefined||v==='')return null;const s=String(v).trim().toLowerCase().replace(/\./g,':');let m=s.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return null;if(m[3]){if(h<1||h>12)return null;if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return null;return h*60+n}m=s.match(/^(\d{1,2})(\d{2})$/);if(m&&+m[1]<=23&&+m[2]<=59)return +m[1]*60+ +m[2];return null}
+function norm(v){if(v===null||v===undefined)return '';const s=String(v).trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=s.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=s.match(/^(\d{1,2})(\d{2})$/);if(m&&+m[1]<=23&&+m[2]<=59)return String(+m[1]).padStart(2,'0')+':'+String(+m[2]).padStart(2,'0');if(/^\d{1,2}$/.test(s)&&+s<=23)return String(+s).padStart(2,'0')+':00';return ''}
+function fmt(n){n=Math.max(0,Math.round(Number(n)||0));return Math.floor(n/60)+'h '+String(n%60).padStart(2,'0')+'m'}
+function dateKey(d,e){return d+'|'+e.employee_code}
+function sunday(d){return new Date(d+'T12:00:00').getDay()===0}
+function holiday(d){return state.data.holidays.some(h=>String(h.holiday_date).slice(0,10)===d)}
+function employee(){return state.data.employees.filter(e=>String(e.active)!=='false')[state.activeEmployee]}
+function rule(e){return state.data.rules.find(r=>r.category===e.category)||{}}
+function baseRow(date,e){const key=dateKey(date,e), found=state.data.attendance.find(r=>String(r.key)===key);return found?JSON.parse(JSON.stringify(found)):{
+ key,employee_code:e.employee_code,employee_name:e.name,date,in_time:'',out_time:'',in_time_2:'',out_time_2:'',
+ ut_minutes:'',sl_minutes:'',ot_minutes:'',attendance:'',note:'',ut_override_minutes:'',sl_override_minutes:'',ot_override_minutes:'',
+ migrated:false,legacy_daily_id:'',legacy_attendance_id:'',updated_at:''
+}}
+function calc(e,r,date){
+ const rr=rule(e),a=mins(r.in_time);if(a===null)return {ut:0,sl:0,ot:0};
+ const b=mins(r.out_time), eligible=String(rr.ot_eligible)==='true'||rr.ot_eligible===true;
+ let elapsed=0;
+ if(e.split_shift){
+   const a2=mins(r.in_time_2),b2=mins(r.out_time_2),b1=mins(r.out_time);
+   if(a===null||b1===null||a2===null||b2===null)return {ut:0,sl:0,ot:0};
+   elapsed=Math.max(0,b1-a); if(b1<a)elapsed+=1440;
+   let s2=b2-a2;if(s2<0)s2+=1440;elapsed+=s2;
+   if(+e.round_minutes)elapsed=Math.round(elapsed/+e.round_minutes)*+e.round_minutes;
+ } else {
+   if(b===null)return {ut:0,sl:0,ot:0};
+   elapsed=b-a;if(elapsed<0)elapsed+=1440;
+ }
+ let ut=0,sl=0,ot=0;
+ if(!sunday(date)&&!holiday(date)&&!e.split_shift){
+   if(e.name==='Gautam'&&a>=450&&a<540)ut=540-a;
+   else if(e.category==='Gateman'&&a<520)ut=Math.floor((540-a)/30)*30;
+   else if(e.category==='Driver'&&a<520)ut=540-a;
+   const start=e.normal_start_minutes!==''&&e.normal_start_minutes!=null?+e.normal_start_minutes:(e.category==='Gardener'?510:540);
+   sl=Math.max(0,a-start);
+ }
+ if(eligible){
+   if(sunday(date)||holiday(date))ot=elapsed;
+   else if(e.split_shift){const extra=elapsed-(+e.normal_work_minutes||480);ot=extra>15?extra:0}
+   else {const end=rr.normal_end?mins(rr.normal_end):1065;let finish=b;if(finish<a)finish+=1440;const extra=Math.max(0,finish-end);ot=extra>15?extra:0}
+ }
+ return {ut,sl,ot}
+}
+function statusFor(e,r,date){if(r.attendance)return r.attendance;if(sunday(date))return 'Sunday';if(holiday(date))return 'Holiday';if(!r.in_time||!r.out_time)return '';return 'Present'}
+function monthDates(month){const [y,m]=month.split('-').map(Number),days=new Date(y,m,0).getDate(),a=[];for(let d=1;d<=days;d++)a.push(month+'-'+String(d).padStart(2,'0'));return a}
+function renderLogin(){ $('app').innerHTML='<div class="login"><h2>FCS Attendance</h2><p class="muted">Enter PIN</p><input id="pin" type="password" inputmode="numeric" autofocus><button class="btn primary" onclick="login()">Continue</button><p id="msg" class="error"></p></div>'; }
+function login(){const pin=$('pin').value.trim();state.pin=pin;state.role=q('mode')==='admin'?'admin':'gate';$('msg').textContent='Loading...';google.script.run.withSuccessHandler(d=>{state.data=d;render()}).withFailureHandler(e=>{$('msg').textContent=e.message||String(e)}).getBootstrap(state.role,pin)}
+function render(){state.role==='admin'?renderAdmin():renderGate()}
+function renderGate(){
+ const e=state.data.employees.filter(x=>String(x.active)!=='false');$('app').innerHTML='<div class="wrap"><div class="top"><div><h1>FCS Attendance</h1><div class="muted">Gateman Entry</div></div><button class="btn" onclick="location.reload()">Refresh</button></div><div class="toolbar"><label>Employee <select id="ge">'+e.map(x=>'<option value="'+esc(x.employee_code)+'">'+esc(x.name)+'</option>').join('')+'</select></label><label>Date <input id="gd" type="date"></label><label>IN <input id="gi" placeholder="9:00" inputmode="numeric"></label><label>OUT <input id="go" placeholder="5:45" inputmode="numeric"></label><button class="btn primary" onclick="gateSave()">Save</button><span id="gs" class="status"></span></div><div class="summary">Enter one IN/OUT record at a time. If internet is unavailable, entry is kept on this phone and retried later.</div></div>';
+ $('gd').value=new Date().toLocaleDateString('en-CA');$('gi').onblur=()=>{$('gi').value=norm($('gi').value)};$('go').onblur=()=>{$('go').value=norm($('go').value)};loadPendingCount();
+}
+function gateSave(){
+ const code=$('ge').value,date=$('gd').value,it=norm($('gi').value),out=norm($('go').value),e=state.data.employees.find(x=>x.employee_code===code);
+ if(!date||!it||!out)return $('gs').textContent='Enter date, IN and OUT.';
+ const row=baseRow(date,e);row.in_time=it;row.out_time=out;const c=calc(e,row,date);row.ut_minutes=c.ut;row.sl_minutes=c.sl;row.ot_minutes=c.ot;row.attendance=statusFor(e,row,date);row.migrated=false;
+ const pending=JSON.parse(localStorage.getItem(state.pendingKey)||'[]');const i=pending.findIndex(x=>x.key===row.key);if(i>=0)pending[i]=row;else pending.push(row);localStorage.setItem(state.pendingKey,JSON.stringify(pending));$('gs').textContent='Saved on phone. Syncing...';syncPending();
+}
+function loadPendingCount(){const n=JSON.parse(localStorage.getItem(state.pendingKey)||'[]').length;if(n)$('gs').textContent=n+' pending local entry(s).'}
+function syncPending(){const p=JSON.parse(localStorage.getItem(state.pendingKey)||'[]');if(!p.length)return;google.script.run.withSuccessHandler(()=>{localStorage.removeItem(state.pendingKey);loadPendingCount();if($('gs'))$('gs').textContent='Saved to Google Sheet.'}).withFailureHandler(()=>{loadPendingCount()}).saveAttendanceRows(p,'gate',state.pin)}
+window.addEventListener('online',syncPending);
+
+function renderAdmin(){
+ const emps=state.data.employees.filter(x=>String(x.active)!=='false');if(state.activeEmployee>=emps.length)state.activeEmployee=0;
+ $('app').innerHTML='<div class="wrap"><div class="top"><div><h1>FCS Attendance</h1><div class="muted">Google Sheets storage</div></div><button class="btn" onclick="location.reload()">Refresh</button></div><div id="admin"></div></div>';renderRegister();
+}
+function renderRegister(){
+ const emps=state.data.employees.filter(x=>String(x.active)!=='false'),e=emps[state.activeEmployee],dates=monthDates(state.month);
+ $('admin').innerHTML='<div class="toolbar noPrint"><label>Month <input id="am" type="month" value="'+state.month+'"></label><button class="btn" onclick="prevPerson(-1)">◀</button><select id="person">'+emps.map((x,i)=>'<option value="'+i+'" '+(i===state.activeEmployee?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><button class="btn" onclick="prevPerson(1)">▶</button><button class="btn" onclick="saveAdmin()">Save Changes</button><button class="btn" onclick="exportExcel()">Excel</button><button class="btn" onclick="window.print()">Print</button><span id="as" class="status ok">Loaded</span></div><div class="summary" id="tot"></div><div class="tablebox"><table class="reg"><thead><tr><th class="date">Date</th><th class="name">Employee</th><th>IN</th><th>UT</th><th>OUT</th><th>SL</th><th>OT</th><th>Attendance</th></tr></thead><tbody>'+dates.map(d=>rowHtml(d,e)).join('')+'</tbody></table></div><div class="cards">'+dates.map(d=>cardHtml(d,e)).join('')+'</div>';
+ $('am').onchange=ev=>{state.month=ev.target.value;renderRegister()};$('person').onchange=ev=>{state.activeEmployee=+ev.target.value;renderRegister()};updateTotals(e,dates);
+}
+function rowHtml(date,e){const r=getRow(date,e),s=statusFor(e,r,date),cl=s==='Sunday'?'sunday':s==='Holiday'?'holiday':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(s)?'leave':s==='Present'?'present':'blank';return '<tr class="'+cl+'" data-key="'+esc(r.key)+'" data-date="'+date+'"><td class="date">'+date.split('-').reverse().join('/')+'</td><td class="name">'+esc(e.name)+'</td><td><input class="cell time" data-f="in_time" value="'+esc(r.in_time)+'"></td><td><input class="cell" data-f="ut_minutes" value="'+esc(fmt(r.ut_minutes))+'"></td><td><input class="cell time" data-f="out_time" value="'+esc(r.out_time)+'"></td><td><input class="cell" data-f="sl_minutes" value="'+esc(fmt(r.sl_minutes))+'"></td><td><input class="cell" data-f="ot_minutes" value="'+esc(fmt(r.ot_minutes))+'"></td><td><select class="statusCell" data-f="attendance">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option value="'+x+'" '+(x===s?'selected':'')+'>'+x+'</option>').join('')+'</select></td></tr>'}
+function cardHtml(date,e){const r=getRow(date,e),s=statusFor(e,r,date);return '<div class="card" data-key="'+esc(r.key)+'"><div class="cardhead"><b>'+date.split('-').reverse().join('/')+'</b><select data-f="attendance">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option value="'+x+'" '+(x===s?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="grid2"><label>IN<input class="time" data-f="in_time" value="'+esc(r.in_time)+'"></label><label>OUT<input class="time" data-f="out_time" value="'+esc(r.out_time)+'"></label><label>UT<input data-f="ut_minutes" value="'+esc(fmt(r.ut_minutes))+'"></label><label>SL<input data-f="sl_minutes" value="'+esc(fmt(r.sl_minutes))+'"></label><label>OT<input data-f="ot_minutes" value="'+esc(fmt(r.ot_minutes))+'"></label></div></div>'}
+function getRow(date,e){const k=dateKey(date,e);if(state.dirty.has(k))return state.dirty.get(k);const r=baseRow(date,e);if(!r.attendance)r.attendance='';return r}
+function bindRows(){
+ document.querySelectorAll('[data-key]').forEach(row=>row.querySelectorAll('[data-f]').forEach(el=>{el.addEventListener('change',()=>editRow(row.dataset.key,row.dataset.date));el.addEventListener('blur',()=>{if(el.classList.contains('time'))editRow(row.dataset.key,row.dataset.date)})}));
+}
+function editRow(key,date){const e=employee(),r=getRow(date,e);document.querySelectorAll('[data-key="'+CSS.escape(key)+'"] [data-f]').forEach(el=>{const f=el.dataset.f;if(f==='in_time'||f==='out_time'){r[f]=norm(el.value);el.value=r[f];r.ut_override_minutes='';r.sl_override_minutes='';r.ot_override_minutes='';const c=calc(e,r,date);r.ut_minutes=c.ut;r.sl_minutes=c.sl;r.ot_minutes=c.ot}else if(f==='attendance')r.attendance=el.value;else{const n=parseDuration(el.value);if(n!==null){r[f]=n;if(f==='ut_minutes')r.ut_override_minutes=n;if(f==='sl_minutes')r.sl_override_minutes=n;if(f==='ot_minutes')r.ot_override_minutes=n}}});r.migrated=false;state.dirty.set(key,r);updateRowDom(key,r,e,date);updateTotals(e,monthDates(state.month))}
+function parseDuration(v){const s=String(v||'').trim().toLowerCase();let m=s.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(s))return +s;return null}
+function updateRowDom(key,r,e,date){document.querySelectorAll('[data-key="'+CSS.escape(key)+'"]').forEach(row=>{row.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f;if(f==='ut_minutes'||f==='sl_minutes'||f==='ot_minutes')el.value=fmt(r[f]);else if(f==='attendance')el.value=statusFor(e,r,date);else if(r[f]!==undefined)el.value=r[f]||''})})}
+function updateTotals(e,dates){let ot=0,ut=0,sl=0;dates.forEach(d=>{const r=getRow(d,e);ot+=+r.ot_minutes||0;ut+=+r.ut_minutes||0;sl+=+r.sl_minutes||0});$('tot').textContent='Person Total: OT '+fmt(ot)+'   UT '+fmt(ut)+'   SL '+fmt(sl)}
+function saveAdmin(){const rows=Array.from(state.dirty.values());if(!rows.length)return $('as').textContent='No changes';$('as').textContent='Saving...';google.script.run.withSuccessHandler(()=>{$('as').textContent='Saved';rows.forEach(r=>{const i=state.data.attendance.findIndex(x=>x.key===r.key);if(i>=0)state.data.attendance[i]=r;else state.data.attendance.push(r)});state.dirty.clear()}).withFailureHandler(e=>$('as').textContent=e.message||String(e)).saveAttendanceRows(rows,'admin',state.pin)}
+function prevPerson(n){const emps=state.data.employees.filter(x=>String(x.active)!=='false');state.activeEmployee=(state.activeEmployee+n+emps.length)%emps.length;renderRegister()}
+function exportExcel(){
+ if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return}
+ const wb=XLSX.utils.book_new(),emps=state.data.employees.filter(x=>String(x.active)!=='false'),dates=monthDates(state.month);
+ emps.forEach(e=>{const rows=[['Date','IN','UT','OUT','SL','OT','Attendance']];dates.forEach(d=>{const r=getRow(d,e),s=statusFor(e,r,d);rows.push([d.split('-').reverse().join('/'),r.in_time||'',fmt(r.ut_minutes),r.out_time||'',fmt(r.sl_minutes),fmt(r.ot_minutes),s])});const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}];XLSX.utils.book_append_sheet(wb,ws,e.name.slice(0,31))});XLSX.writeFile(wb,'FCS_Attendance_'+state.month+'.xlsx')}
+function init(){state.role=q('mode')==='admin'?'admin':'gate';if(!state.pin)renderLogin()}
+window.addEventListener('load',init);
+</script>
