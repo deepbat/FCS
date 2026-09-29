@@ -134,7 +134,7 @@ function renderRegister(){
  h+='</tbody>';$('regTable').innerHTML=h;
  $('regCards').innerHTML=rows.map(date=>{
    const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
-   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label>'+(isSplit?'<label>IN 2<input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></label><label>OUT 2<input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></label>':'')+'<label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
+   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
  }).join('');
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e,el))));
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e,el))));
@@ -149,7 +149,7 @@ async function editCell(tr,e,changed){
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
   tr.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
-    if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){markUnsaved();$('saveState').textContent='Invalid time: '+v;return}d[f]=parsed;el.value=d[f]||''}
+    if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;el.value=d[f]||''}
     else if(['ut','sl','ot'].includes(f)){
       if(timeChanged)return;
       const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
@@ -221,7 +221,7 @@ async function editCard(card,e,changed){
   const timeChanged=timeFields.includes(changed?.dataset?.f);
   card.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
-    if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){markUnsaved();$('saveState').textContent='Invalid time: '+v;return}d[f]=parsed;}
+    if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;}
     else if(['ut','sl','ot'].includes(f)){
       if(timeChanged)return;
       const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
@@ -288,6 +288,7 @@ async function saveAll(){
    const d=drafts.get(key),e=d&&emp(d.id);if(!e)continue;
    const label=e.name+' '+d.date;
    try{
+    if(d.invalidTime)throw new Error('invalid '+d.invalidTime+' time');
     const fields=['in_time',isVarinder(e)?'final_out':'out_time',...(e.split_shift&&!isVarinder(e)?['in_time_2','out_time_2']:[])];
     for(const field of fields){
      const input=document.querySelector('#regCards [data-date="'+d.date+'"] [data-f="'+field+'"]')||document.querySelector('#regTable tr[data-date="'+d.date+'"] [data-f="'+field+'"]');
@@ -329,8 +330,8 @@ function exportEmployee(){
  if(hasUnsaved){alert('Please save changes before exporting payroll data.');return}
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
-   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,'IN 2':e.split_shift?(isVarinder(e)?'06:00':d.in_time_2):'',UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,'OUT 2':e.split_shift?d.out_time_2:'',SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
-   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','IN 2','UT','OUT','OUT 2','SL','OT','Attendance']});
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
+   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Attendance']});
    const personTotals={ot:0,ut:0,sl:0};
    rows.forEach(r=>{
      personTotals.ut+=parseAdj(r.UT)||0;
@@ -340,15 +341,13 @@ function exportEmployee(){
    XLSX.utils.sheet_add_json(ws,[{
      Date:'TOTAL',
      IN:'',
-     'IN 2':'',
      UT:fmtMin(personTotals.ut),
      OUT:'',
-     'OUT 2':'',
      SL:fmtMin(personTotals.sl),
      OT:fmtMin(personTotals.ot),
      Attendance:''
    }],{skipHeader:true,origin:-1});
-   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:9},{wch:20}];
+   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:20}];
    let name=(e.name||'Employee').replace(/[\\/?*\[\]:]/g,' ').slice(0,31)||'Employee',base=name,n=2;
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
