@@ -102,7 +102,7 @@ $('summaryMode').onclick=()=>{currentMode='summary';$('summaryMode').classList.a
 renderRegister();
 }
 function monthToolbar(){
-return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><div class="personTabs">'+employees.filter(e=>e.active).map((e,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(e.name)+'</button>').join('')+'</div><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
+return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
 }
 function datesForMonth(){
  const [start,end]=range(month);const today=new Date().toISOString().slice(0,10);const currentMonth=new Date().toISOString().slice(0,7);
@@ -111,7 +111,7 @@ function datesForMonth(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div>';
+ $('register').innerHTML=monthToolbar()+'<div class="registerLayout noPrint"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div></div></div>';
  $('month').onchange=e=>{month=e.target.value;activeEmployee=0;renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
