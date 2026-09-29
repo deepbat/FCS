@@ -4,9 +4,9 @@ body{margin:0;background:#eef4f7;color:#183047;font-family:Arial,Helvetica,sans-
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 h1{font-size:23px;margin:0 0 3px}p{margin:0;color:#64748b}
 .card{background:#fff;border:1px solid #d5e0e8;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(23,50,77,.05)}
-.gate-card{max-width:620px;margin:0 auto}
+.gate-card{max-width:620px;margin:0 auto}.hidden{display:none!important}
 label{display:block;font-size:13px;font-weight:700;margin:12px 0 5px;color:#40566b}
-input,select,button{font:inherit}input{width:100%;padding:11px;border:1px solid #c8d5df;border-radius:7px;background:#fff;color:#183047}
+input,select,button{font:inherit}select{width:100%;padding:11px;border:1px solid #c8d5df;border-radius:7px;background:#fff;color:#183047}input{width:100%;padding:11px;border:1px solid #c8d5df;border-radius:7px;background:#fff;color:#183047}
 .employeeList{display:flex;flex-direction:column;gap:5px;max-height:290px;overflow:auto;border:1px solid #d5e0e8;border-radius:8px;padding:6px;background:#f7fafc}
 .employeeBtn{width:100%;text-align:left;border:1px solid transparent;border-radius:6px;padding:9px 11px;background:#fff;color:#29465e;cursor:pointer}
 .employeeBtn:hover{background:#edf5f8}.employeeBtn.selected{background:#dcecf2;border-color:#7aa9ba;font-weight:700;color:#17324d}
