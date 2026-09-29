@@ -5,7 +5,7 @@ const root=document.getElementById('root');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 let employees=[],rules=[],holidays=[],records=[],attendance=[];
-let employeeMap=new Map(),ruleMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
+let employeeMap=new Map(),ruleMap=new Map(),holidayMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
 let grandTotals={ot:0,ut:0,sl:0}, editSeq=new Map();
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), hasUnsaved=false;
@@ -17,7 +17,7 @@ const time=t=>t?String(t).slice(0,5):'';
 const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
 const range=m=>{const [y,mo]=m.split('-').map(Number),nmo=mo===12?1:mo+1,ny=mo===12?y+1:y;return [m+'-01',ny+'-'+String(nmo).padStart(2,'0')+'-01']};
 function emp(id){return employeeMap.get(id)}
-function hol(date){return holidays.find(h=>h.holiday_date===date)}
+function hol(date){return holidayMap.get(date)}
 function isSunday(date){return new Date(date+'T12:00:00').getDay()===0}
 function ruleFor(e){return ruleMap.get(e.category)||{}}
 function isVarinder(e){return e?.name==='Varinder Pal'&&!!e?.split_shift}
@@ -91,6 +91,7 @@ async function loadData(){
   employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];records=dr.data||[];attendance=ar.data||[];
   employeeMap=new Map(employees.map(e=>[e.id,e]));
   ruleMap=new Map(rules.map(r=>[r.category,r]));
+  holidayMap=new Map(holidays.map(h=>[h.holiday_date,h]));
   recordMap=new Map(records.map(r=>[rowKey(r.work_date,r.employee_id),r]));
   attendanceMap=new Map(attendance.map(a=>[rowKey(a.work_date,a.employee_id),a]));
   drafts.clear();editSeq.clear();rebuildGrandTotals();
@@ -114,8 +115,7 @@ return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="mo
 }
 function datesForMonth(){
  const [start,end]=range(month);
- let cutoff=end;
- const out=[];let d=new Date(start+'T12:00:00'),z=new Date(cutoff+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
+ const out=[];let d=new Date(start+'T12:00:00'),z=new Date(end+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
@@ -141,6 +141,7 @@ function renderRegister(){
 }
 async function editCell(tr,e,changed){
   const date=tr.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
+  const before={ut:d.ut,sl:d.sl,ot:d.ot};
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
   dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
@@ -158,6 +159,7 @@ async function editCell(tr,e,changed){
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
     }catch(err){
       if(editSeq.get(key)!==seq)return;
@@ -165,6 +167,7 @@ async function editCell(tr,e,changed){
     }
     return;
   }
+  adjustGrandTotals(before,d);
   markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
 function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
@@ -209,6 +212,7 @@ function updateCardValues(card,e,d){
 }
 async function editCard(card,e,changed){
   const date=card.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
+  const before={ut:d.ut,sl:d.sl,ot:d.ot};
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
   dirtyDrafts.add(key);
   const timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'];
@@ -227,12 +231,14 @@ async function editCard(card,e,changed){
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
       d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      adjustGrandTotals(before,d);
     }catch(err){
       if(editSeq.get(key)!==seq)return;
       markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
       return;
     }
   }
+  adjustGrandTotals(before,d);
   markUnsaved();
   updateCardValues(card,e,d);
   updateRegSummary(e,datesForMonth());
