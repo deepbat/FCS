@@ -19,44 +19,22 @@ function hol(date){return holidays.find(h=>h.holiday_date===date)}
 function isSunday(date){return new Date(date+'T12:00:00').getDay()===0}
 function ruleFor(e){return rules.find(r=>r.category===e.category)||{}}
 function isVarinder(e){return e?.name==='Varinder Pal'&&!!e?.split_shift}
-function calc(e,rec,date){
-  const varinder=isVarinder(e);
-  if(!rec?.in_time)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
-  const r=ruleFor(e), a=mins(rec.in_time);
-  let elapsed;
-  if(e.split_shift){
-    const firstOut=mins(varinder?(rec.out_time||'01:00'):rec.out_time);
-    const secondIn=mins(varinder?'06:00':rec.in_time_2);
-    const secondOut=mins(varinder?(rec.final_out||rec.out_time_2):rec.out_time_2);
-    if(firstOut==null||secondIn==null||secondOut==null)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
-    elapsed=(firstOut-a)+(secondOut-secondIn);
-    if(e.round_minutes)elapsed=Math.round(elapsed/e.round_minutes)*e.round_minutes;
-  }else{
-    if(!rec.out_time)return {ut:0,sl:0,ot:0,worked:0,elapsed:0};
-    const b=mins(rec.out_time);elapsed=b>=a?b-a:b+1440-a;
-  }
-  let ut=0,sl=0;
-  if(!e.split_shift&&!isSunday(date)&&!hol(date)){
-    const special=e.name==='Gautam'&&e.category==='Gateman';
-    const start=e.normal_start_minutes!=null?Number(e.normal_start_minutes):(mins(r.normal_start)||540);
-    if((e.category==='Driver'||e.category==='Gateman')&&a<520)ut=Math.floor((540-a)/30)*30;
-    if(special){ut=a<450?Math.floor((540-a)/30)*30:Math.max(0,540-a);sl=Math.max(0,a-450)}
-    else sl=Math.max(0,a-start);
-  }
-  const otEligible=!!r.ot_eligible;
-  let ot=0;
-  if(otEligible){
-    if(isSunday(date)||hol(date))ot=elapsed;
-    else {
-      const normalEnd=mins(r.normal_end)||((e.normal_work_minutes||r.normal_work_minutes||0)+(mins(r.normal_start)||540));
-      let finish=mins(rec.out_time);
-      if(finish<540)finish+=1440;
-      const extra=Math.max(0,finish-normalEnd);
-      if(extra>(r.ot_threshold_minutes||0))ot=extra;
-    }
-  }
-  const worked=e.split_shift?elapsed:Math.max(0,elapsed-(e.break_minutes||0));
-  return {ut,sl,ot,worked,elapsed};
+async function calculate(e,d,date){
+  const firstOut=isVarinder(e)?(d.out_time||'01:00'):d.out_time;
+  const secondIn=e.split_shift?(isVarinder(e)?'06:00':d.in_time_2):null;
+  const secondOut=e.split_shift?(isVarinder(e)?d.final_out:d.out_time_2):null;
+  const {data,error}=await db.rpc('calculate_attendance',{
+    p_employee_id:e.id,
+    p_work_date:date,
+    p_in_time:d.in_time||null,
+    p_out_time:firstOut||null,
+    p_in_time_2:secondIn||null,
+    p_out_time_2:secondOut||null
+  });
+  if(error)throw error;
+  const c=Array.isArray(data)?data[0]:data;
+  if(!c)throw new Error('No calculation returned.');
+  return c;
 }
 function statusFor(e,date,rec,existing){
   if(existing)return existing.status;
@@ -74,22 +52,45 @@ function rowKey(date,id){return date+'|'+id}
 function getDraft(date,id){
   const key=rowKey(date,id);if(drafts.has(key))return drafts.get(key);
   const r=records.find(x=>x.work_date===date&&x.employee_id===id),a=attendance.find(x=>x.work_date===date&&x.employee_id===id),e=emp(id);
-  const c=calc(e,{...r,final_out:time(r?.out_time_2)},date);if(r?.ut_override_minutes!=null)c.ut=Number(r.ut_override_minutes)||0;if(r?.sl_override_minutes!=null)c.sl=Number(r.sl_override_minutes)||0;if(r?.ot_override_minutes!=null)c.ot=Number(r.ot_override_minutes)||0;if(isVarinder(e)&&r?.ot_minutes!=null&&!r?.ot_override_minutes)c.ot=Number(r.ot_minutes)||0;const d={date,id,in_time:time(r?.in_time),out_time:time(r?.out_time)|| (isVarinder(e)?'01:00':''),final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),in_time_2:time(r?.in_time_2),out_time_2:time(r?.out_time_2),ut:c.ut,sl:c.sl,ot:c.ot,status:statusFor(e,date,r,a),ut_override:r?.ut_override_minutes,sl_override:r?.sl_override_minutes,ot_override:r?.ot_override_minutes,record:r,attendance:a};
+  const d={
+    date,id,
+    in_time:time(r?.in_time),
+    out_time:time(r?.out_time)||(isVarinder(e)?'01:00':''),
+    final_out:isVarinder(e)?(time(r?.out_time_2)||''):time(r?.out_time),
+    in_time_2:time(r?.in_time_2),
+    out_time_2:time(r?.out_time_2),
+    ut:Number(r?.ut_minutes)||0,
+    sl:Number(r?.sl_minutes)||0,
+    ot:Number(r?.ot_minutes)||0,
+    status:statusFor(e,date,r,a),
+    ut_override:r?.ut_override_minutes,
+    sl_override:r?.sl_override_minutes,
+    ot_override:r?.ot_override_minutes,
+    record:r,attendance:a
+  };
+  if(d.ut_override!=null)d.ut=Number(d.ut_override)||0;
+  if(d.sl_override!=null)d.sl=Number(d.sl_override)||0;
+  if(d.ot_override!=null)d.ot=Number(d.ot_override)||0;
   drafts.set(key,d);return d;
 }
 function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
 function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
 window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
 async function loadData(){
-  const [er,rr,hr,dr,ar]=await Promise.all([
+  const [start,end]=range(month);
+  const [er,rr,hr,dr,ar,cr]=await Promise.all([
     db.from('employees').select('*').order('employee_code'),
     db.from('category_rules').select('*').order('category'),
     db.from('holidays').select('*').order('holiday_date'),
-    db.from('daily_records').select('*').order('work_date,employee_id'),
-    db.from('attendance').select('*').order('work_date,employee_id')
+    db.from('daily_records').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id'),
+    db.from('attendance').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id'),
+    db.rpc('calculate_attendance_month',{p_start_date:start,p_end_date:end})
   ]);
-  if(er.error||rr.error||hr.error||dr.error||ar.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error].filter(Boolean).map(x=>x.message).join('; '));
-  employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];records=dr.data||[];attendance=ar.data||[];
+  if(er.error||rr.error||hr.error||dr.error||ar.error||cr.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error,cr.error].filter(Boolean).map(x=>x.message).join('; '));
+  employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];attendance=ar.data||[];
+  const computed=new Map((cr.data||[]).map(x=>[x.id,x]));
+  records=(dr.data||[]).map(r=>({...r,...(computed.get(r.id)||{})}));
+  drafts.clear();
 }
 function shell(user){
 root.innerHTML='<div class="app"><div class="top"><div><h1>FCS Attendance</h1><div class="muted">'+esc(user.email||'')+'</div></div><div><button id="logout" class="btn">Logout</button></div></div><div class="card savebar"><button id="saveAll" class="btn primary">Save Changes</button><span id="saveState" class="saveState">All changes saved</span></div><div class="tabs"><button class="btn active" data-tab="attendance">Attendance</button><button class="btn" data-tab="employees">Employees</button><button class="btn" data-tab="holidays">Holidays</button><button class="btn" data-tab="settings">Settings</button></div><section id="attendanceSection"></section><section id="employeesSection" class="hidden"></section><section id="holidaysSection" class="hidden"></section><section id="settingsSection" class="hidden"></section></div>';
@@ -116,7 +117,7 @@ function datesForMonth(){
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
  $('register').innerHTML=monthToolbar()+'<div class="registerLayout noPrint"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div></div></div>';
- $('month').onchange=e=>{month=e.target.value;activeEmployee=0;renderRegister()};
+ $('month').onchange=async e=>{month=e.target.value;activeEmployee=0;await loadData();renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
@@ -135,34 +136,56 @@ function renderRegister(){
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e))));
  updateRegSummary(e,rows);updateGrandTotal();
 }
-function editCell(tr,e,changed){
- const date=tr.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));
- const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
- tr.querySelectorAll('[data-f]').forEach(el=>{
-   const f=el.dataset.f,v=el.value;
-   if(timeFields.includes(f)){d[f]=normalize(v);el.value=d[f]||'';}
-   else if(['ut','sl','ot'].includes(f)){
-     if(timeChanged) return;
-     const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
-   } else d[f]=v;
- });
- if(timeChanged){d.ut_override=null;d.sl_override=null;d.ot_override=null}
- const x=calc({...e},{...d},date);
- if(d.ut_override==null)d.ut=x.ut;
- if(d.sl_override==null)d.sl=x.sl;
- if(d.ot_override==null)d.ot=x.ot;
- markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
+async function editCell(tr,e,changed){
+  const date=tr.dataset.date,d=getDraft(date,e.id);
+  dirtyDrafts.add(rowKey(date,e.id));
+  const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
+  tr.querySelectorAll('[data-f]').forEach(el=>{
+    const f=el.dataset.f,v=el.value;
+    if(timeFields.includes(f)){d[f]=normalize(v);el.value=d[f]||'';}
+    else if(['ut','sl','ot'].includes(f)){
+      if(timeChanged)return;
+      const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
+    } else d[f]=v;
+  });
+  if(timeChanged){
+    d.ut_override=null;d.sl_override=null;d.ot_override=null;
+    try{
+      const c=await calculate(e,d,date);
+      d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
+    }catch(err){markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}}
+    return;
+  }
+  markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
 }
 function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySelector('[data-f="'+f+'"]');if(x)x.value=fmtMin(d[f])})}
 function updateRegSummary(e,rows){let ot=0,ut=0,sl=0;rows.forEach(d=>{const x=getDraft(d,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});$('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl)}
 function totalsForAll(){let ot=0,ut=0,sl=0;const rows=datesForMonth();employees.filter(e=>e.active).forEach(e=>rows.forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0}));return {ot,ut,sl}}
 function updateGrandTotal(){const x=$('grandTotal');if(!x)return;const t=totalsForAll();x.textContent='Grand Total (All People):  OT '+fmtMin(t.ot)+'   UT '+fmtMin(t.ut)+'   SL '+fmtMin(t.sl)}
-function editCard(card,e){const date=card.dataset.date,d=getDraft(date,e.id);dirtyDrafts.add(rowKey(date,e.id));card.querySelectorAll('[data-f]').forEach(el=>{const f=el.dataset.f,v=el.value;if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;}else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}else d[f]=v});const c=calc({...e},{...d},date);if(d.ut_override==null)d.ut=c.ut;if(d.sl_override==null)d.sl=c.sl;if(d.ot_override==null)d.ot=c.ot;markUnsaved();renderRegister();}
+async function editCard(card,e){
+  const date=card.dataset.date,d=getDraft(date,e.id);
+  dirtyDrafts.add(rowKey(date,e.id));
+  let timeChanged=false;
+  card.querySelectorAll('[data-f]').forEach(el=>{
+    const f=el.dataset.f,v=el.value;
+    if(['in_time','out_time','in_time_2','out_time_2','final_out'].includes(f)){d[f]=normalize(v);d.ut_override=null;d.sl_override=null;d.ot_override=null;timeChanged=true}
+    else if(['ut','sl','ot'].includes(f)){const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}}
+    else d[f]=v
+  });
+  if(timeChanged){
+    try{
+      const c=await calculate(e,d,date);
+      d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+    }catch(err){markUnsaved();return}
+  }
+  markUnsaved();renderRegister();
+}
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
  let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
  active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
- h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=e=>{month=e.target.value;renderSummary()};$('summaryPrint').onclick=()=>window.print();
+ h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=async e=>{month=e.target.value;await loadData();renderSummary()};$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
  $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
@@ -187,8 +210,8 @@ async function saveAll(){
   for(const category of dirtyRules){const r=ruleFor({category});const {error}=await db.from('category_rules').update({normal_start:r.normal_start,normal_end:r.normal_end,normal_work_minutes:+r.normal_work_minutes||0,break_minutes:+r.break_minutes||0,ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0}).eq('category',category);if(error)throw new Error('Rule '+category+': '+error.message)}
   for(const key of dirtyDrafts){const d=drafts.get(key),e=emp(d.id);if(!e)continue;const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2),finalOut=normalize(d.final_out),existing=d.record;
    if(!it || (isVarinder(e)&&!finalOut)){if(existing){const {error}=await db.from('daily_records').delete().eq('id',existing.id);if(error)throw error}const {error}=await db.from('attendance').delete().eq('work_date',d.date).eq('employee_id',d.id);if(error)throw error;continue}
-   const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;const c=calc(e,{...d,in_time:it,out_time:firstOut,in_time_2:secondIn,out_time_2:secondOut,final_out:secondOut},d.date),r=ruleFor(e);
-   const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,break_minutes:e.split_shift?0:(r.break_minutes??e.break_minutes??0),normal_work_minutes:e.split_shift?(e.normal_work_minutes??r.normal_work_minutes??0):(r.normal_work_minutes??e.normal_work_minutes??0),ot_eligible:!!r.ot_eligible,ot_threshold_minutes:+r.ot_threshold_minutes||0,round_minutes:e.round_minutes||0,full_day_ot:isSunday(d.date)||!!hol(d.date),total_elapsed_minutes:c.elapsed,worked_minutes:c.worked,ut_minutes:d.ut_override!=null?d.ut_override:c.ut,sl_minutes:d.sl_override!=null?d.sl_override:c.sl,ot_minutes:d.ot_override!=null?d.ot_override:c.ot,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
+   const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;
+   const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
    if(existing){const {error}=await db.from('daily_records').update(p).eq('id',existing.id);if(error)throw error}else{const {error}=await db.from('daily_records').insert({...p,client_id:crypto.randomUUID()});if(error)throw error}
    const {error}=await db.from('attendance').upsert({work_date:d.date,employee_id:d.id,status:d.status||statusFor(e,d.date,d,null),updated_at:new Date().toISOString()},{onConflict:'work_date,employee_id'});if(error)throw error;
   }
