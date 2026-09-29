@@ -19,6 +19,8 @@ async function syncQueue(){
       for(const k of ['normal_work_minutes','break_minutes','ot_threshold_minutes','round_minutes','total_elapsed_minutes','worked_minutes','ot_minutes','ut_minutes','sl_minutes']){
         if(typeof p.record[k]==='boolean')p.record[k]=p.record[k]?1:0;
       }
+      if(typeof p.record.ot_eligible==='number')p.record.ot_eligible=!!p.record.ot_eligible;
+      if(typeof p.record.full_day_ot==='number')p.record.full_day_ot=!!p.record.full_day_ot;
     }
     let recordOk=false,attendanceOk=false;
     try{const r=await db.from('daily_records').upsert(p.record,{onConflict:'work_date,employee_id'});if(r.error)lastSyncError=r.error.message;else recordOk=true}catch(e){lastSyncError=e?.message||String(e)}
@@ -102,8 +104,8 @@ async function save(){
     client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,
     in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
     break_minutes:e.split_shift?0:(e.break_minutes||0),normal_work_minutes:normal,
-    ot_eligible:rule?.ot_eligible?1:0,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
-    round_minutes:e.round_minutes||0,full_day_ot:(sunday||hol)?1:0,total_elapsed_minutes:elapsed,
+    ot_eligible:!!rule?.ot_eligible,ot_threshold_minutes:rule?.ot_threshold_minutes||15,
+    round_minutes:e.round_minutes||0,full_day_ot:!!(sunday||hol),total_elapsed_minutes:elapsed,
     worked_minutes:elapsed,sl_minutes:sl,ot_minutes:ot,updated_at:new Date().toISOString()
   };
   const attendancePayload={work_date:date,employee_id:e.id,status,updated_at:new Date().toISOString()};
