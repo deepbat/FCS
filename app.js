@@ -30,7 +30,12 @@ function renderEmployees(){
  $('inTime').placeholder=isVarinder(e)?'6:00pm':'9:00';
  $('outTime').placeholder=isVarinder(e)?'8:00am':'5:45';
  const splitBox=$('secondShift');
- if(splitBox)splitBox.classList.toggle('hidden',!e?.split_shift||isVarinder(e));
+ const showGenericSplit=!!e?.split_shift&&!isVarinder(e);
+ if(splitBox)splitBox.classList.toggle('hidden',!showGenericSplit);
+ if(showGenericSplit){
+   if($('inTime2')&&!$('inTime2').value)$('inTime2').value='1:00am';
+   if($('outTime2')&&!$('outTime2').value)$('outTime2').value='6:00am';
+ }
 }
 async function loadEmployees(){
  $('employeeList').innerHTML='<div class="loading">Loading employees...</div>';$('saveBtn').disabled=true;
@@ -80,6 +85,11 @@ function clearInputs(){
  $('outTime').value='';
  if($('inTime2'))$('inTime2').value='';
  if($('outTime2'))$('outTime2').value='';
+ const e=selected();
+ if(e?.split_shift&&!isVarinder(e)){
+   if($('inTime2'))$('inTime2').value='1:00am';
+   if($('outTime2'))$('outTime2').value='6:00am';
+ }
 }
 async function save(){
  if(saving)return;
