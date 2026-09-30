@@ -48,6 +48,13 @@ async function calculate(e,d,date){
     c.sl_minutes=0;
     c.full_day_ot=true;
   }
+  // Gautam: normal start is 9:00am. UT is capped at 1h30m.
+  // Any arrival before 7:30am is early duty/call, but still gets the 1h30m applicable UT.
+  if(e.name==='Gautam' && e.category==='Gateman' && d.in_time && !isSunday(date) && !hol(date)){
+    const inMin=mins(d.in_time);
+    c.ut_minutes=inMin<450?90:(inMin<540?540-inMin:0);
+    c.sl_minutes=inMin>=540?Math.max(inMin-540,0):0;
+  }
   return c;
 }
 function statusFor(e,date,rec,existing){
