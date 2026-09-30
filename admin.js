@@ -11,7 +11,7 @@ const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.get
 let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), hasUnsaved=false;
 
 const fmtDate=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
-const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return Math.floor(n/60)+'h '+String(n%60).padStart(2,'0')+'m'};
+const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')};
 const mins=t=>{if(!t)return null;const p=String(t).slice(0,5).split(':').map(Number);return p[0]*60+p[1]};
 const time=t=>t?String(t).slice(0,5):'';
 const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
@@ -99,7 +99,7 @@ function getDraft(date,id){
   if(d.ot_override!=null)d.ot=Number(d.ot_override)||0;
   drafts.set(key,d);return d;
 }
-function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;const m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
+function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;let m=v.match(/^(\d+):([0-5]\d)$/);if(m)return +m[1]*60+(+m[2]);m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
 function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
 function confirmDiscard(){return !hasUnsaved||confirm('Discard unsaved changes?')}
 window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
