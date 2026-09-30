@@ -125,7 +125,7 @@ function datesForMonth(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div class="registerLayout"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div><div id="grandTotal" class="summary"></div></div></div>';
+ $('register').innerHTML=monthToolbar()+'<div class="registerLayout"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div></div></div>';
  $('month').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;activeEmployee=0;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
@@ -208,11 +208,7 @@ function adjustGrandTotals(){
   // This avoids drift from incremental deltas and guarantees export/print agreement.
   grandTotals=recomputeGrandTotals();
 }
-function updateGrandTotal(){
-  grandTotals=recomputeGrandTotals();
-  const x=$('grandTotal');if(!x)return;
-  x.textContent='Grand Total (All People):  OT '+fmtMin(grandTotals.ot)+'   UT '+fmtMin(grandTotals.ut)+'   SL '+fmtMin(grandTotals.sl);
-}
+function updateGrandTotal(){}
 function updateCardValues(card,e,d){
   const cls=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
   card.className='regCard '+cls;
@@ -392,12 +388,6 @@ function exportEmployee(){
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
  });
- const grandRows=employees.filter(e=>e.active).map(e=>{let ot=0,ut=0,sl=0;datesForMonth().forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0});return {Employee:e.name,OT:fmtMin(ot),UT:fmtMin(ut),SL:fmtMin(sl)}});
- const totals=grandRows.reduce((a,r)=>{a.ot+=(parseAdj(r.OT)||0);a.ut+=(parseAdj(r.UT)||0);a.sl+=(parseAdj(r.SL)||0);return a},{ot:0,ut:0,sl:0});
- grandRows.push({Employee:'GRAND TOTAL',OT:fmtMin(totals.ot),UT:fmtMin(totals.ut),SL:fmtMin(totals.sl)});
- const totalWs=XLSX.utils.json_to_sheet(grandRows,{header:['Employee','OT','UT','SL']});
- totalWs['!cols']=[{wch:24},{wch:12},{wch:12},{wch:12}];
- XLSX.utils.book_append_sheet(wb,totalWs,'Grand Total');
  XLSX.writeFile(wb,'FCS_Attendance_'+month+'.xlsx');
 }
 (async()=>{
