@@ -29,7 +29,7 @@ The browser must not be treated as the source of truth for calculated OT/UT/SL.
 | 008 | Barkha | Gateman | 495m elapsed requirement including 15m break |
 | 009 | Rajan | Gateman | 480m normal duty; night-duty OT is recorded manually |
 | 010 | Pemba Tamang | Gateman | 480m normal duty; night-duty OT is recorded manually |
-| 011 | Ajay Kumar | Driver | 520m normal duty, 40m break; normal start 8:20am |
+| 011 | Ajay Kumar | Driver | 8:20am–5:00pm, 520m duty, 40m break; OT eligible |
 | 012 | Satpal Singh | Driver | 9am–5:45pm, 45m break, OT eligible |
 
 Category rules are stored in Supabase and can be edited by Admin. Employee-specific values are stored on the employee record.
@@ -165,7 +165,7 @@ UT, SL and OT overrides are explicit values stored in:
 
 When an override exists, it takes precedence over the calculated value.
 
-Changing IN/OUT does not silently destroy an existing manual override. To change an override, edit that UT/SL/OT field explicitly.
+Changing IN/OUT clears the existing UT/SL/OT overrides for that row and recalculates them from the new timings. This prevents stale payroll values from surviving a timing change. If an exception is required, re-enter the manual UT/SL/OT override explicitly after changing the timing.
 
 This is important for source-register values such as Rajan and Pemba night-duty OT.
 
@@ -240,7 +240,7 @@ Excel export contains:
 
 - one worksheet per active employee
 - person-wise TOTAL row
-- separate Grand Total worksheet
+- no unnecessary overall Grand Total worksheet
 
 Export is blocked while there are unsaved changes.
 
@@ -353,6 +353,7 @@ The production calculator must not be tested only against itself. Expected resul
 
 - The gate is intentionally simple and does not require a user login.
 - Night-duty OT from the physical source register is represented through explicit manual OT overrides rather than inferred from the ordinary daytime OT formula.
+- Employee-specific schedules are authoritative where configured. Ajay Kumar is 8:20am–5:00pm with 520m duty and 40m break; his late arrival is minute-for-minute SL from 8:20am and his OT reference end is 5:00pm.
 - The repository's complete historical Supabase migration SQL has not yet been reconstructed; do not attempt to manufacture it from migration names alone.
 - Historical source-register discrepancies are preserved rather than silently rewritten.
 
