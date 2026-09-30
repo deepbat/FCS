@@ -36,6 +36,13 @@ async function calculate(e,d,date){
   if(error)throw error;
   const c=Array.isArray(data)?data[0]:data;
   if(!c)throw new Error('No calculation returned.');
+  // Pemba Sunday night duty: automatic OT only through 9:00am; later time is voluntary.
+  if(e.name==='Pemba Tamang' && isSunday(date) && d.in_time && mins(d.in_time)>=18*60){
+    const capped=Math.min(Number(c.total_elapsed_minutes)||0,780);
+    const extra=Math.max(capped-(Number(c.normal_work_minutes)||480),0);
+    c.ot_minutes=extra>Number(c.ot_threshold_minutes||15)?extra:0;
+    c.full_day_ot=false;
+  }
   return c;
 }
 function statusFor(e,date,rec,existing){
