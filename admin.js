@@ -310,14 +310,21 @@ async function saveAll(){
     if(!it||!(isVarinder(e)?finalOut:ot))throw new Error('IN and OUT are required. Use Delete entry to remove a record.');
     if(e.split_shift&&!isVarinder(e)&&(!it2||!ot2))throw new Error('both second-shift times are required');
     if(!e.split_shift&&mins(ot)<mins(it))throw new Error('OUT cannot be earlier than IN');
-    const existing=d.record;
     const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;
     const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;
     const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;
-    const p={work_date:d.date,employee_id:d.id,in_time:it,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,ut_override_minutes:d.ut_override,sl_override_minutes:d.sl_override,ot_override_minutes:d.ot_override,updated_at:new Date().toISOString()};
-    const r=existing?await db.from('daily_records').update(p).eq('id',existing.id):await db.from('daily_records').insert({...p,client_id:crypto.randomUUID()});
-    if(r.error)throw r.error;
-    const {error}=await db.from('attendance').upsert({work_date:d.date,employee_id:d.id,status:d.status||statusFor(e,d.date,d,null),updated_at:new Date().toISOString()},{onConflict:'work_date,employee_id'});
+    const {error}=await db.rpc('save_admin_attendance',{
+      p_work_date:d.date,
+      p_employee_id:d.id,
+      p_in_time:it,
+      p_out_time:firstOut,
+      p_in_time_2:e.split_shift?secondIn:null,
+      p_out_time_2:e.split_shift?secondOut:null,
+      p_ut_override_minutes:d.ut_override,
+      p_sl_override_minutes:d.sl_override,
+      p_ot_override_minutes:d.ot_override,
+      p_status:d.status||statusFor(e,d.date,d,null)
+    });
     if(error)throw error;
     dirtyDrafts.delete(key);saved++;
    }catch(err){errors.push(label+': '+err.message)}
