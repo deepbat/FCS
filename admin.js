@@ -205,7 +205,8 @@ function renderRowValues(tr,d){['ut','sl','ot'].forEach(f=>{const x=tr.querySele
 function updateRegSummary(e,rows){
   let ot=0,ut=0,sl=0;
   rows.forEach(date=>{const x=getDraft(date,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});
-  const netOt=ot+ut-sl;\n  $('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+' plus UT '+fmtMin(ut)+' minus SL '+fmtMin(sl)+' = '+fmtMin(netOt);
+  const netOt=ot+ut-sl;
+  $('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+' plus UT '+fmtMin(ut)+' minus SL '+fmtMin(sl)+' = '+fmtMin(netOt);
 }
 function recomputeGrandTotals(){
   const totals={ot:0,ut:0,sl:0};
@@ -385,7 +386,7 @@ function exportEmployee(){
  if(hasUnsaved){alert('Please save changes before exporting payroll data.');return}
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
-   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status}});
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),'Net OT':fmtMin((Number(d.ot)||0)+(Number(d.ut)||0)-(Number(d.sl)||0)),Attendance:d.status}});
    const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Net OT','Attendance']});
    const personTotals={ot:0,ut:0,sl:0};
    rows.forEach(r=>{
@@ -400,6 +401,7 @@ function exportEmployee(){
      OUT:'',
      SL:fmtMin(personTotals.sl),
      OT:fmtMin(personTotals.ot),
+     'Net OT':fmtMin(personTotals.ot+personTotals.ut-personTotals.sl),
      Attendance:''
    }],{skipHeader:true,origin:-1});
    ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12},{wch:12},{wch:20}];
