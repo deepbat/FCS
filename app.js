@@ -101,19 +101,19 @@ async function prepare(entry){
  return {record,attendance};
 }
 async function syncOne(p){
- const record={...p.record};
- for(const k of ['normal_work_minutes','break_minutes','ot_threshold_minutes','round_minutes','total_elapsed_minutes','worked_minutes','ot_minutes','ut_minutes','sl_minutes'])if(typeof record[k]==='boolean')record[k]=record[k]?1:0;
- if(typeof record.ot_eligible==='number')record.ot_eligible=!!record.ot_eligible;
- if(typeof record.full_day_ot==='number')record.full_day_ot=!!record.full_day_ot;
- // A queued gate entry must not silently replace an admin's existing record.
- const {data:existing,error:readError}=await db.from('daily_records').select('client_id').eq('work_date',record.work_date).eq('employee_id',record.employee_id).maybeSingle();
- if(readError)throw readError;
- if(existing&&existing.client_id!==record.client_id)throw new Error('Entry already exists on the server; ask admin to review it.');
- // Retry uses the same client_id. This pair is not atomic until a server-side RPC exists.
- const dr=await db.from('daily_records').upsert(record,{onConflict:'work_date,employee_id'});
- if(dr.error)throw dr.error;
- const ar=await db.from('attendance').upsert(p.attendance,{onConflict:'work_date,employee_id'});
- if(ar.error)throw ar.error;
+ const record=p.record;
+ // One server-side transaction writes both tables. The same client_id is
+ // retained across retries so duplicate queue delivery is idempotent.
+ const {error}=await db.rpc('save_gate_attendance',{
+   p_client_id:record.client_id,
+   p_work_date:record.work_date,
+   p_employee_id:record.employee_id,
+   p_in_time:record.in_time,
+   p_out_time:record.out_time,
+   p_in_time_2:record.in_time_2,
+   p_out_time_2:record.out_time_2
+ });
+ if(error)throw error;
 }
 async function syncPending(){
  if(syncing||!navigator.onLine)return;
