@@ -164,14 +164,13 @@ async function editCell(tr,e,changed){
     // Explicit manual overrides are independent of IN/OUT and must survive
     // unrelated time edits. The user can edit UT/SL/OT directly to replace
     // an override.
-    const overrides={ut:d.ut_override,sl:d.sl_override,ot:d.ot_override};
+    d.ut_override=null;d.sl_override=null;d.ot_override=null;
     try{
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
-      d.ut=overrides.ut!=null?Number(overrides.ut)||0:Number(c.ut_minutes)||0;
-      d.sl=overrides.sl!=null?Number(overrides.sl)||0:Number(c.sl_minutes)||0;
-      d.ot=overrides.ot!=null?Number(overrides.ot)||0:Number(c.ot_minutes)||0;
-      d.ut_override=overrides.ut;d.sl_override=overrides.sl;d.ot_override=overrides.ot;
+      d.ut=Number(c.ut_minutes)||0;
+      d.sl=Number(c.sl_minutes)||0;
+      d.ot=Number(c.ot_minutes)||0;
       adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
     }catch(err){
@@ -237,14 +236,13 @@ async function editCard(card,e,changed){
     } else d[f]=v;
   });
   if(timeChanged){
-    const overrides={ut:d.ut_override,sl:d.sl_override,ot:d.ot_override};
+    d.ut_override=null;d.sl_override=null;d.ot_override=null;
     try{
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
-      d.ut=overrides.ut!=null?Number(overrides.ut)||0:Number(c.ut_minutes)||0;
-      d.sl=overrides.sl!=null?Number(overrides.sl)||0:Number(c.sl_minutes)||0;
-      d.ot=overrides.ot!=null?Number(overrides.ot)||0:Number(c.ot_minutes)||0;
-      d.ut_override=overrides.ut;d.sl_override=overrides.sl;d.ot_override=overrides.ot;
+      d.ut=Number(c.ut_minutes)||0;
+      d.sl=Number(c.sl_minutes)||0;
+      d.ot=Number(c.ot_minutes)||0;
     }catch(err){
       if(editSeq.get(key)!==seq)return;
       markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
@@ -264,9 +262,11 @@ function renderSummary(){
  h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderSummary()};$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
- $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
+ $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Start</th><th>Normal End</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-start="'+e.id+'" value="'+(e.normal_start_minutes==null?'':String(Math.floor(e.normal_start_minutes/60)).padStart(2,'0')+':'+String(e.normal_start_minutes%60).padStart(2,'0'))+'"></td><td><input data-end="'+e.id+'" value="'+(e.normal_end_minutes==null?'':String(Math.floor(e.normal_end_minutes/60)).padStart(2,'0')+':'+String(e.normal_end_minutes%60).padStart(2,'0'))+'"></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
  $('addEmp').onclick=async()=>{const code=$('newCode').value.trim(),name=$('newName').value.trim(),category=$('newCat').value;if(!code||!name)return;$('addEmp').disabled=true;const r=ruleFor({category});const {error}=await db.from('employees').insert({employee_code:code,name,category,normal_work_minutes:r.normal_work_minutes||525,break_minutes:r.break_minutes||0,active:true});if(error){$('empMsg').textContent=error.message;$('empMsg').className='message error'}else{await loadData();renderEmployees();renderRegister()}};
  document.querySelectorAll('[data-active]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.active);e.active=x.checked;dirtyEmployees.add(e.id);markUnsaved()});
+ document.querySelectorAll('[data-start]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.start),v=normalize(x.value);if(x.value.trim()&&!v){x.value=e.normal_start_minutes==null?'':String(Math.floor(e.normal_start_minutes/60)).padStart(2,'0')+':'+String(e.normal_start_minutes%60).padStart(2,'0');return}e.normal_start_minutes=v?mins(v):null;dirtyEmployees.add(e.id);markUnsaved()});
+ document.querySelectorAll('[data-end]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.end),v=normalize(x.value);if(x.value.trim()&&!v){x.value=e.normal_end_minutes==null?'':String(Math.floor(e.normal_end_minutes/60)).padStart(2,'0')+':'+String(e.normal_end_minutes%60).padStart(2,'0');return}e.normal_end_minutes=v?mins(v):null;dirtyEmployees.add(e.id);markUnsaved()});
  document.querySelectorAll('[data-normal]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.normal);e.normal_work_minutes=+x.value||0;dirtyEmployees.add(e.id);markUnsaved()});
  document.querySelectorAll('[data-break]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.break);e.break_minutes=+x.value||0;dirtyEmployees.add(e.id);markUnsaved()});
 }
@@ -288,7 +288,7 @@ async function saveAll(){
  try{
   for(const id of [...dirtyEmployees]){
    const e=emp(id);if(!e)continue;
-   try{const {error}=await db.from('employees').update({active:e.active,normal_work_minutes:e.normal_work_minutes,break_minutes:e.break_minutes}).eq('id',id);if(error)throw error;dirtyEmployees.delete(id);saved++}
+   try{const {error}=await db.from('employees').update({active:e.active,normal_start_minutes:e.normal_start_minutes,normal_end_minutes:e.normal_end_minutes,normal_work_minutes:e.normal_work_minutes,break_minutes:e.break_minutes}).eq('id',id);if(error)throw error;dirtyEmployees.delete(id);saved++}
    catch(err){errors.push('Employee '+e.name+': '+err.message)}
   }
   for(const category of [...dirtyRules]){
@@ -307,7 +307,28 @@ async function saveAll(){
      if(input&&input.value.trim()&&!normalize(input.value))throw new Error('invalid '+field+' time');
     }
     const it=normalize(d.in_time),ot=normalize(d.out_time),it2=normalize(d.in_time_2),ot2=normalize(d.out_time_2),finalOut=normalize(d.final_out);
-    if(!it||!(isVarinder(e)?finalOut:ot))throw new Error('IN and OUT are required. Use Delete entry to remove a record.');
+    const status=d.status||'';
+    const statusOnly=['Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].includes(status);
+    // Admin may mark attendance status without timings, for example Present
+    // during an official tour or Leave without entering IN/OUT.
+    const hasAnyTime=!!it||!!ot||!!it2||!!ot2||!!finalOut;
+    if(!hasAnyTime&&statusOnly){
+      const {error}=await db.rpc('save_admin_attendance',{
+        p_work_date:d.date,
+        p_employee_id:d.id,
+        p_in_time:null,
+        p_out_time:null,
+        p_in_time_2:null,
+        p_out_time_2:null,
+        p_ut_override_minutes:d.ut_override,
+        p_sl_override_minutes:d.sl_override,
+        p_ot_override_minutes:d.ot_override,
+        p_status:status
+      });
+      if(error)throw error;
+      dirtyDrafts.delete(key);saved++;continue;
+    }
+    if(!it||!(isVarinder(e)?finalOut:ot))throw new Error('Enter IN and OUT, or select an attendance status such as Present or Leave.');
     if(e.split_shift&&!isVarinder(e)&&(!it2||!ot2))throw new Error('both second-shift times are required');
     if(!e.split_shift&&mins(ot)<mins(it))throw new Error('OUT cannot be earlier than IN');
     const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;
