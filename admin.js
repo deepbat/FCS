@@ -45,8 +45,13 @@ function statusFor(e,date,rec,existing){
   if(!rec?.in_time||!rec?.out_time)return '';
   if(e.category==='Staff'){
     const a=mins(rec.in_time),b=mins(rec.out_time);
-    if(a<=570&&b<=795)return 'Second Half Leave';
-    if(a>=825&&b>=1035)return 'First Half Leave';
+    const r=ruleFor(e);
+    const start=mins(r.normal_start)||540,end=mins(r.normal_end)||1065;
+    // Preserve the established Staff half-day windows while keeping them
+    // aligned if the configured Staff start/end times are changed.
+    const startShift=start-540,endShift=end-1065;
+    if(a<=570+startShift&&b<=795+endShift)return 'Second Half Leave';
+    if(a>=825+startShift&&b>=1035+endShift)return 'First Half Leave';
   }
   return 'Present';
 }
