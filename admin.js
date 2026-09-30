@@ -36,12 +36,17 @@ async function calculate(e,d,date){
   if(error)throw error;
   const c=Array.isArray(data)?data[0]:data;
   if(!c)throw new Error('No calculation returned.');
-  // Pemba Sunday night duty: automatic OT only through 9:00am; later time is voluntary.
+  // Pemba Sunday night duty: Sunday is a no-duty day.
+  // Automatic OT runs from the scheduled 8:00pm start through 9:00am.
+  // Early arrival before 8:00pm does not create extra OT; time after 9:00am is voluntary.
   if(e.name==='Pemba Tamang' && isSunday(date) && d.in_time && mins(d.in_time)>=18*60){
-    const capped=Math.min(Number(c.total_elapsed_minutes)||0,780);
-    const extra=Math.max(capped-(Number(c.normal_work_minutes)||480),0);
-    c.ot_minutes=extra>Number(c.ot_threshold_minutes||15)?extra:0;
-    c.full_day_ot=false;
+    const inMin=mins(d.in_time);
+    const early=Math.max(20*60-inMin,0);
+    const capped=Math.min(Math.max((Number(c.total_elapsed_minutes)||0)-early,0),780);
+    c.ot_minutes=capped>Number(c.ot_threshold_minutes||15)?capped:0;
+    c.ut_minutes=0;
+    c.sl_minutes=0;
+    c.full_day_ot=true;
   }
   return c;
 }
