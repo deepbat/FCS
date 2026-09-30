@@ -156,11 +156,17 @@ async function editCell(tr,e,changed){
     } else d[f]=v;
   });
   if(timeChanged){
-    d.ut_override=null;d.sl_override=null;d.ot_override=null;
+    // Explicit manual overrides are independent of IN/OUT and must survive
+    // unrelated time edits. The user can edit UT/SL/OT directly to replace
+    // an override.
+    const overrides={ut:d.ut_override,sl:d.sl_override,ot:d.ot_override};
     try{
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
-      d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      d.ut=overrides.ut!=null?Number(overrides.ut)||0:Number(c.ut_minutes)||0;
+      d.sl=overrides.sl!=null?Number(overrides.sl)||0:Number(c.sl_minutes)||0;
+      d.ot=overrides.ot!=null?Number(overrides.ot)||0:Number(c.ot_minutes)||0;
+      d.ut_override=overrides.ut;d.sl_override=overrides.sl;d.ot_override=overrides.ot;
       adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
     }catch(err){
@@ -178,30 +184,28 @@ function updateRegSummary(e,rows){
   rows.forEach(date=>{const x=getDraft(date,e.id);ot+=+x.ot||0;ut+=+x.ut||0;sl+=+x.sl||0});
   $('regSummary').textContent='Person Total:  OT '+fmtMin(ot)+'   UT '+fmtMin(ut)+'   SL '+fmtMin(sl);
 }
-function rebuildGrandTotals(){
-  grandTotals={ot:0,ut:0,sl:0};
-  records.forEach(r=>{
-    grandTotals.ot+=Number(r.ot_minutes)||0;
-    grandTotals.ut+=Number(r.ut_minutes)||0;
-    grandTotals.sl+=Number(r.sl_minutes)||0;
+function recomputeGrandTotals(){
+  const totals={ot:0,ut:0,sl:0};
+  employees.filter(e=>e.active).forEach(e=>{
+    datesForMonth().forEach(date=>{
+      const d=getDraft(date,e.id);
+      totals.ot+=Number(d.ot)||0;
+      totals.ut+=Number(d.ut)||0;
+      totals.sl+=Number(d.sl)||0;
+    });
   });
-  drafts.forEach(d=>{
-    const r=d.record;
-    if(r){
-      grandTotals.ot+=d.ot-(Number(r.ot_minutes)||0);
-      grandTotals.ut+=d.ut-(Number(r.ut_minutes)||0);
-      grandTotals.sl+=d.sl-(Number(r.sl_minutes)||0);
-    }else{
-      grandTotals.ot+=d.ot;grandTotals.ut+=d.ut;grandTotals.sl+=d.sl;
-    }
-  });
+  return totals;
 }
-function adjustGrandTotals(before,d){
-  grandTotals.ot+=(Number(d.ot)||0)-(Number(before.ot)||0);
-  grandTotals.ut+=(Number(d.ut)||0)-(Number(before.ut)||0);
-  grandTotals.sl+=(Number(d.sl)||0)-(Number(before.sl)||0);
+function rebuildGrandTotals(){
+  grandTotals=recomputeGrandTotals();
+}
+function adjustGrandTotals(){
+  // Totals are recomputed from the same draft rows used by the register.
+  // This avoids drift from incremental deltas and guarantees export/print agreement.
+  grandTotals=recomputeGrandTotals();
 }
 function updateGrandTotal(){
+  grandTotals=recomputeGrandTotals();
   const x=$('grandTotal');if(!x)return;
   x.textContent='Grand Total (All People):  OT '+fmtMin(grandTotals.ot)+'   UT '+fmtMin(grandTotals.ut)+'   SL '+fmtMin(grandTotals.sl);
 }
@@ -228,11 +232,14 @@ async function editCard(card,e,changed){
     } else d[f]=v;
   });
   if(timeChanged){
-    d.ut_override=null;d.sl_override=null;d.ot_override=null;
+    const overrides={ut:d.ut_override,sl:d.sl_override,ot:d.ot_override};
     try{
       const c=await calculate(e,d,date);
       if(editSeq.get(key)!==seq)return;
-      d.ut=Number(c.ut_minutes)||0;d.sl=Number(c.sl_minutes)||0;d.ot=Number(c.ot_minutes)||0;
+      d.ut=overrides.ut!=null?Number(overrides.ut)||0:Number(c.ut_minutes)||0;
+      d.sl=overrides.sl!=null?Number(overrides.sl)||0:Number(c.sl_minutes)||0;
+      d.ot=overrides.ot!=null?Number(overrides.ot)||0:Number(c.ot_minutes)||0;
+      d.ut_override=overrides.ut;d.sl_override=overrides.sl;d.ot_override=overrides.ot;
     }catch(err){
       if(editSeq.get(key)!==seq)return;
       markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
@@ -352,8 +359,8 @@ function exportEmployee(){
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
  });
- const totals=grandTotals;
  const grandRows=employees.filter(e=>e.active).map(e=>{let ot=0,ut=0,sl=0;datesForMonth().forEach(date=>{const d=getDraft(date,e.id);ot+=+d.ot||0;ut+=+d.ut||0;sl+=+d.sl||0});return {Employee:e.name,OT:fmtMin(ot),UT:fmtMin(ut),SL:fmtMin(sl)}});
+ const totals=grandRows.reduce((a,r)=>{a.ot+=(parseAdj(r.OT)||0);a.ut+=(parseAdj(r.UT)||0);a.sl+=(parseAdj(r.SL)||0);return a},{ot:0,ut:0,sl:0});
  grandRows.push({Employee:'GRAND TOTAL',OT:fmtMin(totals.ot),UT:fmtMin(totals.ut),SL:fmtMin(totals.sl)});
  const totalWs=XLSX.utils.json_to_sheet(grandRows,{header:['Employee','OT','UT','SL']});
  totalWs['!cols']=[{wch:24},{wch:12},{wch:12},{wch:12}];
