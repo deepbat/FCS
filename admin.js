@@ -326,7 +326,7 @@ async function saveAll(){
     }
     if(!it||!(isVarinder(e)?finalOut:ot))throw new Error('Enter IN and OUT, or select an attendance status such as Present or Leave.');
     if(e.split_shift&&!isVarinder(e)&&(!it2||!ot2))throw new Error('both second-shift times are required');
-    if(!e.split_shift&&mins(ot)<mins(it))throw new Error('OUT cannot be earlier than IN');
+    if(!e.split_shift&&mins(ot)<mins(it)&&!['Driver','Gateman'].includes(e.category))throw new Error('OUT cannot be earlier than IN');
     const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;
     const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;
     const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;
