@@ -308,11 +308,7 @@ Do not clear browser storage while entries are pending.
 
 Production currently contains a migration history in Supabase.
 
-The repository now records new hardening migrations under:
-
-`supabase/migrations/`
-
-The earlier production migration history was created before this repository had a local migration directory. It should not be reconstructed by guessing. A proper baseline can be captured from the live project with Supabase's migration/schema pull workflow before attempting a fresh-project rebuild.
+The four hardening migrations applied during this reliability pass are recorded in the Supabase production migration history. The repository still does not contain the complete historical SQL for the earlier production migrations. It should not be reconstructed by guessing. A proper baseline can be captured from the live project with Supabase's migration/schema pull workflow before attempting a fresh-project rebuild.
 
 ## Backups and recovery
 
