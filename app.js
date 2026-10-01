@@ -149,7 +149,7 @@ async function save(){
  if(!e||!date)return setMessage('Select employee and date.',true);
  if(!it||!out)return setMessage('Enter valid IN and OUT times.',true);
  if(splitGeneric&&(!it2||!out2))return setMessage('Enter both second-shift IN and OUT times.',true);
- if(!e.split_shift&&minutes(out)<minutes(it))return setMessage('OUT cannot be earlier than IN.',true);
+ if(!e.split_shift&&minutes(out)<minutes(it)&&!['Driver','Gateman'].includes(e.category))return setMessage('OUT cannot be earlier than IN.',true);
  saving=true;$('saveBtn').disabled=true;
  try{
   const entry={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:out,in_time_2:it2,out_time_2:out2};
