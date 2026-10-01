@@ -1,6 +1,6 @@
 const SUPABASE_URL='https://raesuqidwkcpylvqiftf.supabase.co';
 const SUPABASE_KEY='sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF';
-const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 const $=id=>document.getElementById(id);
 const QUEUE_KEY='fcs-attendance-pending-v3';
 const EMPLOYEES_KEY='fcs-attendance-employees-v1';
