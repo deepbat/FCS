@@ -1,145 +1,147 @@
 FCS ATTENDANCE
 Rules and Operating Reference
-Updated: 25/09/2026
+Updated: 01/10/2026
 
 1. PURPOSE
-FCS Attendance is used to enter daily timings from the gate register and maintain monthly attendance and overtime records.
+FCS Attendance records daily timings from the gate register and maintains attendance, UT, SL and OT records.
 
-2. EMPLOYEES AND NORMAL TIMINGS
+2. DAILY ENTRY
+- Attendance is maintained date-wise for all active employees.
+- Gateman records timings from the physical gate register.
+- Admin can review and edit daily records.
+- Date can be selected first, so previous-day timings can be entered later.
+- Time is displayed in formats such as 9:05am and 7:20pm.
+- A complete working-day timing normally marks Present unless another attendance status applies.
+- One Save Changes button saves attendance, employee and category-rule changes.
+- Existing attendance data must not be deleted, reset or migrated during normal maintenance.
+
+3. NORMAL TIMINGS
 Staff
-- Normal timing: 9:00am to 5:45pm
-- Break: 45 minutes
-- Normal duty span: 8 hours 45 minutes
-- OT: Not eligible
+- 9:00am to 5:45pm
+- 45-minute break
+- 8 hours 45 minutes duty span
+- No OT
 
 Driver
-- Normal timing: 9:00am to 5:45pm
-- Break: 45 minutes
-- OT: Eligible
+- 9:00am to 5:45pm
+- 45-minute break
+- OT eligible
 
 Gardener
-- Normal timing: 8:30am to 5:10pm
-- Break: 40 minutes
-- Normal duty span: 8 hours 40 minutes
-- OT: Not eligible
+- 8:30am to 5:10pm
+- 40-minute break
+- 8 hours 40 minutes duty span
+- No OT
 
 Gateman
-- Timing is flexible.
-- Normal duty target is configurable.
-- OT: Eligible.
-- Current normal target: 525 minutes.
-- Break is configurable.
+- OT eligible
+- Current normal target: 525 minutes
+- Normal timing and break are configurable in Settings
 
-3. OVERTIME (OT)
-- OT is based on elapsed duty span compared with normal duty span.
-- For Driver and Gateman, up to 15 minutes above normal duty does not count as OT.
-- If extra time is more than 15 minutes, actual extra time is counted as OT.
-- Break is not deducted when deciding OT.
+Barkha
+- 8-hour duty
+- 15-minute break
+- Full-day duty span: 8 hours 15 minutes
+
+4. OVERTIME (OT)
+- OT applies only to OT-eligible employees, currently Driver and Gateman.
+- Up to 15 minutes extra time does not count as OT.
+- More than 15 minutes extra time gives actual extra time as OT.
+- 9:00am to 6:00pm = 0 OT.
+- 9:00am to 6:01pm = 16 minutes OT.
+- 9:00am to 7:01pm = 1 hour 16 minutes OT.
 - Staff and Gardener always have 0 OT.
 
-4. SUNDAY AND HOLIDAY DUTY
-- Driver and Gateman working on Sunday or an entered holiday are treated as full-day OT.
-- Entire duty time is OT.
-- No break is deducted on Sunday/holiday duty.
+5. UNDER TIME (UT)
+- UT applies to OT-eligible employees when they are called early for office work.
+- Normal start reference is 9:00am.
+- Driver/Gateman IN before 8:40am is treated as an early-call situation.
+- Example: 7:30am IN = 1 hour 30 minutes UT.
+- IN at 8:40am or later gives no early-call UT.
+- Sunday and holiday duty never receives UT.
+- Gautam has a specific rule: UT is capped at 1 hour 30 minutes.
+- Gautam arrival before 7:30am still receives 1 hour 30 minutes UT.
+- Gautam arrivals at or after 9:00am can create SL according to current calculation.
+
+6. SUNDAY AND HOLIDAY
 - Sunday is automatically identified.
 - Holidays are maintained under Admin > Holidays.
+- Driver and Gateman working on Sunday or an entered holiday receive full elapsed duty time as OT.
+- No break is deducted for Sunday/holiday OT.
+- Future dates are not treated as Absent automatically.
 
-5. UNDER TIME (UT)
-Under Time applies to OT-eligible employees when they are called early for office work.
-
-- Normal start time for this rule is 9:00am.
-- If Driver or Gateman IN time is before 8:40am, system assumes employee was called early and gives UT.
-- UT = 9:00am minus actual IN time.
-- Example: IN at 7:30am = 1:30 UT.
-- IN at 8:40am or later gives no UT.
-- A person merely arriving slightly early, at or after 8:40am, does not receive UT.
-- Sunday and holiday duty never receives UT.
-- UT is not applied on Sunday or holiday duty.
-- UT is calculated from actual recorded IN time.
-
-6. VARINDER PAL
-Varinder Pal has a split shift:
-- Evening period: approximately 6:00pm to 1:00am.
-- Morning period: approximately 6:00am to 7:00am.
+7. SPLIT SHIFT / SPECIAL TIMING
+Varinder Pal
+- Evening: approximately 6:00pm to 1:00am.
+- Morning: approximately 6:00am to 7:00am.
 - Normal total duty: 8 hours.
 - No break deduction.
 - Time is rounded to 30-minute intervals.
-- Both periods are recorded in the daily record.
+- Both periods are recorded in daily record.
 
-7. ATTENDANCE STATUS
-Staff:
-- Present
-- First Half Leave
-- Second Half Leave
-- Full Day Leave
+Pemba Tamang
+- Sunday night duty has a special 8:00pm to 9:00am calculation.
+- Early arrival before 8:00pm does not create extra OT.
+- Time after 9:00am is voluntary.
+- Sunday night duty does not receive UT.
 
-Other employees:
+Other split-shift employees
+- Use IN 2 and OUT 2 where configured.
+
+8. LEAVE AND ATTENDANCE
+Available statuses:
 - Present
 - Absent
 - Leave
 - Half Day
-- Holiday
+- First Half Leave
+- Second Half Leave
+- Full Day Leave
 - Sunday
+- Holiday
 
-8. STAFF AUTO-SUGGESTION
-For Staff:
-- IN by 9:30am and OUT by 1:15pm -> Second Half Leave
-- IN from 1:45pm and OUT from 5:15pm -> First Half Leave
-- IN by 9:30am and OUT from 5:15pm -> Present
+Staff half-day suggestions:
+- IN by 9:30am and OUT by 1:15pm -> Second Half Leave.
+- IN from 1:45pm and OUT from 5:15pm -> First Half Leave.
+- IN by 9:30am and OUT from 5:15pm -> Present.
 - Other combinations require manual attendance selection.
 
-9. DAILY REGISTER
-- Gateman enters timings from the physical register.
-- Previous entries are not displayed to gateman.
-- Admin can review and edit daily records.
-- Admin changes are saved using the single Save Changes button.
-- Blank IN/OUT clears an existing daily timing record for that employee/date.
-- Split-shift employees show IN, OUT, IN 2 and OUT 2.
-- Non-split employees cannot save an OUT time earlier than IN.
-- Date and employee are used to identify each daily record.
+Admin may mark attendance without timings, for example Present during official tour or Leave.
 
-10. OFFLINE / MOBILE SYNC
+9. MOBILE / GATEMAN SYNC
 - Gateman app can save entries locally when internet is unavailable.
-- Pending entries are automatically uploaded when internet becomes available.
-- The app retries pending uploads automatically.
-- A duplicate employee/date conflict is not silently discarded; it remains pending for review.
+- Pending entries retry automatically when internet becomes available.
 - Do not clear browser data or app storage while entries are pending.
-- "Synced" means pending local entries have been uploaded successfully.
+- Sync conflicts are not silently treated as successful.
+- “Synced” means pending local entries have been uploaded successfully.
 
-11. MONTHLY ATTENDANCE REPORT
-- Monthly Report is for attendance only.
-- It shows all active employees.
-- Columns:
-  Present, Half Day, Leave, Absent, Sunday, Holiday.
-- It does not show Worked Hours or OT.
-- For an incomplete current month, attendance is reported only up to latest date for which attendance/record data has been entered.
+10. REPORTS
+Monthly Attendance Summary
+- Shows attendance counts.
+- Shows active employees.
+- Does not show Worked Hours or OT.
 - Future dates are not treated as Absent.
 
-12. OT / UT REPORT
-- OT Report is separate from Monthly Attendance Report.
-- It is restricted to OT-eligible employees: Driver and Gateman.
-- It shows every calendar date in selected month.
-- Each employee has:
-  Date | IN | OUT | IN 2 | OUT 2 | OT | UT
-- IN 2 and OUT 2 are used for split-shift employees such as Varinder Pal.
-- Sunday/holiday OT is full elapsed duty time with no break deduction.
-- Regular Driver/Gateman OT is based on OUT time after 5:45pm, with up to 15 minutes ignored. 6:00pm = 0 OT; 6:01pm = 16 minutes OT.
-- Blank dates remain blank.
-- Sub total shows separate OT and UT totals.
-- Total shows combined OT + UT.
-- Employee selection can be used to include or exclude individual eligible employees.
-- Printed report is arranged so one employee occupies one page.
-- Excel export creates one worksheet/tab per employee, with worksheet named after employee.
+OT / UT Report
+- Restricted to OT-eligible employees.
+- Shows date-wise IN, OUT, IN 2, OUT 2, OT and UT where applicable.
+- Person-wise totals only. No grand total.
+- Printed report is arranged one employee per page.
+- Excel export creates one worksheet/tab per employee.
+- Export must be done after saving changes.
+- Dates use dd/mm/yyyy format.
 
-13. IMPORTANT DATA RULE
-Attendance status and timing records are separate. A timing record without an explicitly entered attendance status is treated as Present for monthly attendance reporting, unless date is a Sunday or entered holiday.
+11. DATA SAFETY
+- Do not delete or reset existing attendance data.
+- Do not migrate attendance data to another database.
+- Do not replace Supabase or rebuild database as part of normal UI/rules changes.
+- Calculation changes must be tested against existing records before release.
 
-14. ADMIN AREAS
-- Daily Register: enter/review daily timings and attendance.
-- Monthly Report: monthly attendance summary.
-- OT Report: detailed OT and UT report.
-- Employees: maintain employee list and employee-specific rules.
-- Holidays: maintain holiday dates.
-- Settings: maintain category rules.
+12. ADMIN AREAS
+- Attendance: daily register and monthly summary.
+- Employees: employee list and employee-specific timing settings.
+- Holidays: holiday dates.
+- Settings: category start, end, normal minutes, break, OT eligibility and OT threshold.
+- Rules / README: this reference.
 
-This file is the reference for current FCS Attendance rules. If any rule is changed, update this file at the same time as the software.
+If any operating rule is changed, update this file and the Admin Rules / README page at the same time.
