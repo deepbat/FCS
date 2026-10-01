@@ -118,7 +118,7 @@ async function syncOne(p){
 async function syncPending(){
  if(syncing||!navigator.onLine)return;
  syncing=true;
- let failed=0,conflict=false;
+ let failed=0,conflict=false,firstError='';
  try{
   // Remove only the item we successfully sent; do not overwrite entries queued mid-sync.
   for(const item of queue()){
@@ -127,10 +127,23 @@ async function syncPending(){
    try{
     await syncOne(item.entry?await prepare(item.entry):item);
     saveQueue(queue().filter(x=>x!==current && (x.entry?.client_id||x.record?.client_id)!==(current.entry?.client_id||current.record?.client_id)));
-   }catch(err){failed++;if(/already exists on the server/.test(err.message))conflict=true;console.warn('Pending entry was retained:',err)}
+   }catch(err){
+    failed++;
+    const msg=String(err?.message||err||'Unknown sync error');
+    if(!firstError)firstError=msg;
+    if(/already exists on the server/i.test(msg))conflict=true;
+    console.warn('Pending entry was retained:',err);
+   }
   }
- }finally{syncing=false;setSync();if(conflict)setMessage('An entry already exists on the server. Pending entry kept for admin review.',true);else if(failed)setMessage(failed+' pending entr'+(failed===1?'y':'ies')+' could not sync. Kept on this phone.',true)}
-}
+ }finally{
+  syncing=false;
+  setSync();
+  if(conflict){
+    setMessage('Sync stopped: an entry already exists on the server. Pending entry kept for admin review.',true);
+  }else if(failed){
+    setMessage('Sync failed: '+firstError+'. It will retry automatically.',true);
+  }
+ }}
 function clearInputs(){
  $('inTime').value='';
  $('outTime').value='';
