@@ -126,9 +126,9 @@ root.innerHTML='<div class="app"><div class="top"><div><h1>FCS Attendance</h1><d
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 $('logout').onclick=async()=>{await db.auth.signOut();location.href='./admin.html'};
 $('saveAll').onclick=saveAll;
-renderAttendance();renderEmployees();renderHolidays();renderSettings();
+renderAttendance();renderEmployees();renderHolidays();renderSettings();renderRules();
 }
-function switchTab(t){currentTab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));['attendance','employees','holidays','settings'].forEach(x=>document.getElementById(x+'Section').classList.toggle('hidden',x!==t));}
+function switchTab(t){currentTab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));['attendance','employees','holidays','settings','rules'].forEach(x=>document.getElementById(x+'Section').classList.toggle('hidden',x!==t));}
 function renderAttendance(){
 $('attendanceSection').innerHTML='<div class="modes"><button id="registerMode" class="btn active">Attendance Register</button><button id="summaryMode" class="btn">Monthly Summary</button></div><div id="register"></div><div id="summary" class="hidden"></div>';
 $('registerMode').onclick=()=>{currentMode='register';$('registerMode').classList.add('active');$('summaryMode').classList.remove('active');$('register').classList.remove('hidden');$('summary').classList.add('hidden');renderRegister()};
@@ -294,6 +294,115 @@ function renderHolidays(){
 function renderSettings(){
  $('settingsSection').innerHTML='<div class="card"><h3>Category Rules</h3><div class="tablewrap"><table><thead><tr><th>Category</th><th>Start</th><th>End</th><th>Normal Minutes</th><th>Break</th><th>OT</th><th>Threshold</th></tr></thead><tbody>'+rules.map(r=>'<tr><td>'+esc(r.category)+'</td><td><input data-r="start" data-cat="'+esc(r.category)+'" value="'+time(r.normal_start)+'"></td><td><input data-r="end" data-cat="'+esc(r.category)+'" value="'+time(r.normal_end)+'"></td><td><input data-r="normal" data-cat="'+esc(r.category)+'" value="'+(r.normal_work_minutes||0)+'"></td><td><input data-r="break" data-cat="'+esc(r.category)+'" value="'+(r.break_minutes||0)+'"></td><td><input type="checkbox" data-r="ot" data-cat="'+esc(r.category)+'" '+(r.ot_eligible?'checked':'')+'></td><td><input data-r="threshold" data-cat="'+esc(r.category)+'" value="'+(r.ot_threshold_minutes||15)+'"></td></tr>').join('')+'</tbody></table></div></div>';
  document.querySelectorAll('[data-r]').forEach(x=>x.onchange=()=>{const r=ruleFor({category:x.dataset.cat}),f=x.dataset.r;r[f==='start'?'normal_start':f==='end'?'normal_end':f==='normal'?'normal_work_minutes':f==='break'?'break_minutes':f==='ot'?'ot_eligible':'ot_threshold_minutes']=x.type==='checkbox'?x.checked:x.value;dirtyRules.add(r.category);markUnsaved()});
+}
+function renderRules(){
+ const html=`
+ <div class="card readme">
+  <h2>FCS Attendance - Rules & README</h2>
+  <div class="muted">Current operating rules. This page is read-only. Changes to rules should be made in Settings and in README.txt when software rules are changed.</div>
+
+  <h3>1. Daily entry</h3>
+  <ul>
+   <li>Attendance is maintained date-wise for all active employees.</li>
+   <li>Gateman records timings from physical gate register. Admin can review and edit all entries.</li>
+   <li>Date can be selected first, so previous-day timings can be entered later.</li>
+   <li>Time format is normally shown as 9:05am, 7:20pm. System also accepts standard 24-hour input.</li>
+   <li>A complete timing entry normally marks employee as Present unless another attendance status applies.</li>
+   <li>Admin has one Save Changes button for attendance, employee and category-rule changes.</li>
+   <li>Existing attendance data must not be deleted, reset or migrated as part of normal maintenance.</li>
+  </ul>
+
+  <h3>2. Normal working rules</h3>
+  <ul>
+   <li><b>Staff:</b> 9:00am to 5:45pm, 45-minute break, 8 hours 45 minutes duty span. No OT.</li>
+   <li><b>Driver:</b> 9:00am to 5:45pm, 45-minute break. OT eligible.</li>
+   <li><b>Gardener:</b> 8:30am to 5:10pm, 40-minute break, 8 hours 40 minutes duty span. No OT.</li>
+   <li><b>Gateman:</b> OT eligible. Normal target is currently 525 minutes, with rules configurable in Settings.</li>
+   <li><b>Barkha:</b> 8-hour duty with 15-minute break. Full-day duty span is 8 hours 15 minutes.</li>
+  </ul>
+
+  <h3>3. Overtime (OT)</h3>
+  <ul>
+   <li>OT is applicable only to OT-eligible employees, currently Driver and Gateman.</li>
+   <li>Up to 15 minutes extra time does not count as OT.</li>
+   <li>More than 15 minutes extra time gives actual extra time as OT.</li>
+   <li>Example: 9:00am to 6:00pm = 0 OT. 9:00am to 6:01pm = 16 minutes OT.</li>
+   <li>Example: 9:00am to 7:01pm = 1 hour 16 minutes OT.</li>
+   <li>Staff and Gardener always have 0 OT.</li>
+   <li>Break is not deducted from Sunday/holiday OT.</li>
+  </ul>
+
+  <h3>4. Under Time (UT)</h3>
+  <ul>
+   <li>UT applies to OT-eligible employees when they are called early for office work.</li>
+   <li>Normal start reference is 9:00am.</li>
+   <li>If Driver or Gateman IN time is before 8:40am, system treats this as an early-call situation and calculates UT.</li>
+   <li>Example: 7:30am IN gives 1 hour 30 minutes UT.</li>
+   <li>IN at 8:40am or later gives no early-call UT under this rule.</li>
+   <li>Sunday and holiday duty never receives UT.</li>
+   <li>Gautam has a specific rule: UT is capped at 1 hour 30 minutes; arrival before 7:30am still receives 1 hour 30 minutes UT. Arrivals at or after 9:00am can create SL according to current calculation.</li>
+  </ul>
+
+  <h3>5. Sunday and holiday duty</h3>
+  <ul>
+   <li>Sunday is automatically identified.</li>
+   <li>Holidays are entered under Admin &gt; Holidays.</li>
+   <li>Driver and Gateman working on Sunday or a holiday receive full elapsed duty time as OT.</li>
+   <li>No break is deducted for Sunday/holiday OT.</li>
+   <li>Future dates are not automatically treated as Absent.</li>
+  </ul>
+
+  <h3>6. Split shift / special timing</h3>
+  <ul>
+   <li>Varinder Pal has a split shift: approximately 6:00pm to 1:00am and 6:00am to 7:00am.</li>
+   <li>Varinder Pal normal total duty is 8 hours, with no break deduction.</li>
+   <li>Varinder Pal timing is rounded to 30-minute intervals.</li>
+   <li>Pemba Tamang Sunday night duty follows a special 8:00pm to 9:00am calculation. Early arrival before 8:00pm does not create extra OT, and time after 9:00am is voluntary.</li>
+   <li>Other split-shift employees use IN 2 and OUT 2 fields where configured.</li>
+  </ul>
+
+  <h3>7. Leave and attendance status</h3>
+  <ul>
+   <li>Available statuses include Present, Absent, Leave, Half Day, First Half Leave, Second Half Leave, Full Day Leave, Sunday and Holiday.</li>
+   <li>For Staff, existing half-day suggestion windows are retained: early-day IN/OUT can suggest Second Half Leave, and afternoon IN/OUT can suggest First Half Leave.</li>
+   <li>Admin can manually enter an attendance status without timings, for example Present during official tour or Leave.</li>
+   <li>Blank IN/OUT with a selected attendance status saves attendance without a timing record.</li>
+  </ul>
+
+  <h3>8. Mobile / Gateman sync</h3>
+  <ul>
+   <li>Gateman app can save entries locally when internet is unavailable.</li>
+   <li>Pending entries retry automatically when internet becomes available.</li>
+   <li>Do not clear browser data or app storage while entries are pending.</li>
+   <li>A sync conflict is not silently treated as successfully saved.</li>
+   <li>“Synced” means pending local entries have been uploaded successfully.</li>
+  </ul>
+
+  <h3>9. Reports and export</h3>
+  <ul>
+   <li>Monthly Attendance Summary shows attendance counts and does not use Worked Hours or OT as attendance columns.</li>
+   <li>OT Report is restricted to OT-eligible employees.</li>
+   <li>OT Report shows date-wise IN, OUT, IN 2, OUT 2, OT and UT where applicable.</li>
+   <li>OT report totals are person-wise. No grand total is required.</li>
+   <li>Printed OT report is arranged one employee per page.</li>
+   <li>Excel export creates one worksheet/tab per employee.</li>
+   <li>Export must be done only after saving changes.</li>
+   <li>Dates are displayed in dd/mm/yyyy format.</li>
+  </ul>
+
+  <h3>10. Data safety</h3>
+  <div class="ruleNote"><b>Important:</b> Do not delete, reset or migrate existing attendance data. Do not replace Supabase or rebuild database structure as part of a normal UI/rules change. Changes to calculation logic must be tested against existing records before release.</div>
+
+  <h3>11. Admin sections</h3>
+  <ul>
+   <li><b>Attendance:</b> daily register and monthly summary.</li>
+   <li><b>Employees:</b> employee list and employee-specific normal timing settings.</li>
+   <li><b>Holidays:</b> add and maintain holiday dates.</li>
+   <li><b>Settings:</b> category-level start, end, normal minutes, break, OT eligibility and OT threshold.</li>
+   <li><b>Rules / README:</b> this reference page.</li>
+  </ul>
+ </div>`;
+ $('rulesSection').innerHTML=html;
 }
 let savingAll=false;
 async function saveAll(){
