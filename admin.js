@@ -319,7 +319,7 @@ function renderRules(){
    <li><b>Gardener:</b> 8:30am to 5:10pm, 40-minute break, 8 hours 40 minutes duty span. No OT.</li>
    <li><b>Gateman:</b> OT eligible. Normal target is currently 525 minutes, with rules configurable in Settings.</li>
    <li><b>Barkha:</b> 8-hour duty with 15-minute break. Full-day duty span is 8 hours 15 minutes.</li>
-   <li><b>Vakil Mehto:</b> flexible timing between 9:00am-5:45pm and 9:30am-6:15pm, with 45-minute break and 8 hours normal work. Few minutes early is voluntary, no UT. Start up to 9:30am has no SL; after 9:30am SL starts from 9:30am. No OT.</li>
+   <li><b>Vakil Mehto:</b> flexible timing between 9:00am-5:45pm and 9:30am-6:15pm, with 40-minute break and 8 hours normal work. Few minutes early is voluntary, no UT. Start up to 9:30am has no SL; after 9:30am SL starts from 9:30am. No OT.</li>
   </ul>
 
   <h3>3. Overtime (OT)</h3>
