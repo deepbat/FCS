@@ -45,7 +45,7 @@ Barkha
 
 Vakil Mehto
 - Timing is flexible between 9:00am-5:45pm and 9:30am-6:15pm.
-- Both schedules include a 45-minute break and 8 hours of normal work.
+- Both schedules include a 40-minute break and 8 hours of normal work.
 - Few minutes early is voluntary and does not create UT.
 - Start time is allowed up to 9:30am without SL.
 - If IN is after 9:30am, SL starts from 9:30am.
