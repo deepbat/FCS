@@ -43,6 +43,14 @@ Barkha
 - 15-minute break
 - Full-day duty span: 8 hours 15 minutes
 
+Vakil Mehto
+- Timing is flexible between 9:00am-5:45pm and 9:30am-6:15pm.
+- Both schedules include a 45-minute break and 8 hours of normal work.
+- Few minutes early is voluntary and does not create UT.
+- Start time is allowed up to 9:30am without SL.
+- If IN is after 9:30am, SL starts from 9:30am.
+- No OT.
+
 4. OVERTIME (OT)
 - OT applies only to OT-eligible employees, currently Driver and Gateman.
 - Up to 15 minutes extra time does not count as OT.
