@@ -347,7 +347,7 @@ function renderRules(){
    <li>If an employee is more than 2 hours late, attendance is automatically marked <b>Half Day</b>.</li>
    <li>For a normal 9:00am start, the half-day cutoff is 1:00pm.</li>
    <li>For an OT-eligible employee who arrives more than 2 hours late but before the half-day cutoff, the time remaining up to the half-day cutoff is added as OT.</li>
-   <li>Example: Satpal Singh IN at 12:23pm is 3 hours 23 minutes late. SL is capped at 2 hours, attendance is Half Day, and 12:23pm-1:00pm = <b>37 minutes OT</b>.</li>
+   <li>Example: Satpal Singh IN at 12:23pm is 3 hours 23 minutes late. Attendance is Half Day, SL is <b>00:00</b>, and 12:23pm-1:00pm = <b>37 minutes OT</b>. His normal 1:00pm-1:45pm break is not working time, so the second working period starts at 1:45pm.</li>
    <li>Example: a 2 hours 1 minute late arrival is Half Day; for an OT-eligible employee, the remaining time up to the half-day cutoff is treated as OT, subject to the normal 15-minute OT threshold.</li>
   </ul>
 
