@@ -17,6 +17,10 @@ const normalize=v=>{
  m=v.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(v)&&+v<=23?String(+v).padStart(2,'0')+':00':'';
 };
 const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').className='message '+(error?'error':'ok')};
+const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
+const displayToIso=v=>{const m=String(v||'').trim().match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
+const setDateDisplay=()=>{const iso=$('workDate').value;$('workDateDisplay').value=isoToDisplay(iso)};
+
 const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pending sync':'Ready'};
 
 function selected(){return employees.find(e=>e.id===$('employee').value)}
@@ -172,7 +176,11 @@ async function save(){
  }catch(err){setMessage('Could not save on this phone: '+err.message,true)}
  finally{saving=false;$('saveBtn').disabled=!selected()}
 }
-$('workDate').value=today();
+$('workDate').value=today();setDateDisplay();
+$('workDateDisplay').onblur=()=>{const iso=displayToIso($('workDateDisplay').value);if(!iso){$('workDateDisplay').value=isoToDisplay($('workDate').value);return}$('workDate').value=iso;setDateDisplay()};
+$('workDateDisplay').oninput=()=>{const iso=displayToIso($('workDateDisplay').value);if(iso)$('workDate').value=iso};
+$('datePickerBtn').onclick=()=>{$('workDate').showPicker?.();if(!$('workDate').showPicker)$('workDate').click()};
+$('workDate').onchange=setDateDisplay;
 $('employee').onchange=()=>{clearInputs();renderEmployees();setMessage('')};
 $('saveBtn').onclick=save;
 $('inTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
