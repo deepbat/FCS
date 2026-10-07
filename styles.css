@@ -17,6 +17,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 5px;color:#4056
 input,select,button{font:inherit}
 .gate-card input,.gate-card select{width:100%;padding:11px;background:#fff;border:1px solid #c8d5df;color:#183047;border-radius:10px;min-height:51px;font-family:'Space Grotesk';font-size:16px}
 .gate-card input::placeholder{color:#8a9aab}
+.dateRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.dateBtn{min-height:51px;padding:0 15px;background:#e5eef3;border:1px solid #c8d5df;color:#24485c;border-radius:10px;font-family:'Space Grotesk';font-size:13px}.datePickerHidden{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;padding:0!important;border:0!important}
 .gate-card input:focus,.gate-card select:focus{border-color:#6f7fe8;box-shadow:0 0 0 3px rgba(111,127,232,.14);outline:0}
 .timegrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 button{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:7px;padding:10px 15px;cursor:pointer}
