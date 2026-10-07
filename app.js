@@ -17,8 +17,8 @@ const normalize=v=>{
  m=v.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(v)&&+v<=23?String(+v).padStart(2,'0')+':00':'';
 };
 const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').className='message '+(error?'error':'ok')};
-const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
-const displayToIso=v=>{const m=String(v||'').trim().match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
+const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
+const displayToIso=v=>{const m=String(v||'').trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
 const setDateDisplay=()=>{const iso=$('workDate').value;$('workDateDisplay').value=isoToDisplay(iso)};
 
 const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pending sync':'Ready'};
