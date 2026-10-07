@@ -78,10 +78,10 @@ SL is calculated separately from UT.
 - Gardener late arrival is measured against 8:30am.
 - Other normal employees are measured against their applicable normal start time, normally 9am.
 - Gautam follows his specific 9am normal reference for late arrival while retaining his separate early-call UT rule.
-- If an employee is more than 2 hours late, SL is capped at 2 hours and attendance is marked **Half Day**.
+- If an employee is more than 2 hours late, SL becomes **0** and attendance is marked **Half Day**. Half Day is the attendance deduction and must not be combined with SL.
 - For a normal 9am start, the half-day cutoff is 1pm.
 - For an OT-eligible employee who is more than 2 hours late but arrives before the half-day cutoff, the time from IN until the half-day cutoff is added as OT, subject to the normal 15-minute OT threshold.
-- Example: Satpal Singh IN at 12:23pm is 3h 23m late. SL is capped at 2h, attendance is Half Day, and 12:23pm to 1:00pm gives **37m OT**.
+- Example: Satpal Singh IN at 12:23pm is 3h 23m late. Attendance is Half Day, SL is **0**, and 12:23pm to 1:00pm gives **37m OT**. The normal 1:00pm–1:45pm break is not working time, so the second working period starts at 1:45pm.
 - A 2h 1m late arrival is already Half Day. For an OT-eligible employee, the remaining time until the half-day cutoff is treated as OT, subject to the 15-minute threshold.
 - Evening/night-duty entries do not receive morning SL merely because their IN time is after 6pm.
 - Manual SL overrides are preserved.
