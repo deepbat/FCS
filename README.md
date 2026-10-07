@@ -136,7 +136,7 @@ Staff automatic half-day detection follows the established Staff rule and remain
 7. When online, the server-side save writes the timing and attendance together.
 8. If the network is unavailable, the entry remains in the offline queue.
 9. Failed entries remain pending and are retried.
-10. A server conflict is not silently overwritten; it remains for Admin review.
+10. If Admin has already corrected an employee/date, an older queued gate entry is treated as stale. The server record remains authoritative, the queued entry is acknowledged and removed, and the gate app does not show a conflict error.
 
 The gate does not display previous attendance records.
 
@@ -268,7 +268,7 @@ Important database protections include:
 - server-side calculation
 - server-side atomic saves
 - offline retry instead of silent loss
-- conflict detection for queued gate entries
+- stale queued-entry handling when Admin has already corrected the same employee/date
 
 Existing backup data is retained.
 
@@ -306,7 +306,7 @@ Pending entries:
 - retain their client ID
 - are retried automatically
 - are not silently discarded
-- are not allowed to overwrite a different server entry for the same employee/date
+- never overwrite an existing server entry for the same employee/date
 
 Do not clear browser storage while entries are pending.
 
