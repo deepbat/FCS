@@ -1,3 +1,4 @@
+document.documentElement.lang='en-GB';
 const SUPABASE_URL='https://raesuqidwkcpylvqiftf.supabase.co';
 const SUPABASE_KEY='sb_publishable_IDPqntwDZCE5O5qsakvfTA_dGcex6zF';
 const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
