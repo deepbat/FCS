@@ -131,7 +131,7 @@ async function syncPending(){
     failed++;
     const msg=String(err?.message||err||'Unknown sync error');
     if(!firstError)firstError=msg;
-    if(/already exists on the server/i.test(msg))conflict=true;
+    if(/already exists on the server|different entry already exists on the server/i.test(msg))conflict=true;
     console.warn('Pending entry was retained:',err);
    }
   }
@@ -139,7 +139,7 @@ async function syncPending(){
   syncing=false;
   setSync();
   if(conflict){
-    setMessage('Sync stopped: an entry already exists on the server. Pending entry kept for admin review.',true);
+    setMessage('Sync stopped: a different entry already exists on the server. Pending entry kept for admin review.',true);
   }else if(failed){
     setMessage('Sync failed: '+firstError+'. It will retry automatically.',true);
   }
