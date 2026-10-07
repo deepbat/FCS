@@ -339,7 +339,17 @@ function renderRules(){
    <li>Break is not deducted from Sunday/holiday OT.</li>
   </ul>
 
-  <h3>4. Under Time (UT)</h3>
+  <h3>4. Short Leave (SL) and Half Day</h3>
+  <ul>
+   <li>Short Leave is allowed for a maximum of 2 hours.</li>
+   <li>If an employee is more than 2 hours late, attendance is automatically marked <b>Half Day</b>.</li>
+   <li>For a normal 9:00am start, the half-day cutoff is 1:00pm.</li>
+   <li>For an OT-eligible employee who arrives more than 2 hours late but before the half-day cutoff, the time remaining up to the half-day cutoff is added as OT.</li>
+   <li>Example: Satpal Singh IN at 12:23pm is 3 hours 23 minutes late. SL is capped at 2 hours, attendance is Half Day, and 12:23pm-1:00pm = <b>37 minutes OT</b>.</li>
+   <li>Example: a 2 hours 1 minute late arrival is Half Day; for an OT-eligible employee, the remaining time up to the half-day cutoff is treated as OT, subject to the normal 15-minute OT threshold.</li>
+  </ul>
+
+  <h3>5. Under Time (UT)</h3>
   <ul>
    <li>UT applies to OT-eligible employees when they are called early for office work.</li>
    <li>Normal start reference is 9:00am.</li>
@@ -350,7 +360,7 @@ function renderRules(){
    <li>Gautam has a specific rule: UT is capped at 1 hour 30 minutes; arrival before 7:30am still receives 1 hour 30 minutes UT. Arrivals at or after 9:00am can create SL according to current calculation.</li>
   </ul>
 
-  <h3>5. Sunday and holiday duty</h3>
+  <h3>6. Sunday and holiday duty</h3>
   <ul>
    <li>Sunday is automatically identified.</li>
    <li>Holidays are entered under Admin &gt; Holidays.</li>
@@ -359,7 +369,7 @@ function renderRules(){
    <li>Future dates are not automatically treated as Absent.</li>
   </ul>
 
-  <h3>6. Split shift / special timing</h3>
+  <h3>7. Split shift / special timing</h3>
   <ul>
    <li>Varinder Pal has a split shift: approximately 6:00pm to 1:00am and 6:00am to 7:00am.</li>
    <li>Varinder Pal normal total duty is 8 hours, with no break deduction.</li>
@@ -368,7 +378,7 @@ function renderRules(){
    <li>Other split-shift employees use IN 2 and OUT 2 fields where configured.</li>
   </ul>
 
-  <h3>7. Leave and attendance status</h3>
+  <h3>8. Leave and attendance status</h3>
   <ul>
    <li>Available statuses include Present, Absent, Leave, Half Day, First Half Leave, Second Half Leave, Full Day Leave, Sunday and Holiday.</li>
    <li>For Staff, existing half-day suggestion windows are retained: early-day IN/OUT can suggest Second Half Leave, and afternoon IN/OUT can suggest First Half Leave.</li>
@@ -376,7 +386,7 @@ function renderRules(){
    <li>Blank IN/OUT with a selected attendance status saves attendance without a timing record.</li>
   </ul>
 
-  <h3>8. Mobile / Gateman sync</h3>
+  <h3>9. Mobile / Gateman sync</h3>
   <ul>
    <li>Gateman app can save entries locally when internet is unavailable.</li>
    <li>Pending entries retry automatically when internet becomes available.</li>
@@ -385,7 +395,7 @@ function renderRules(){
    <li>“Synced” means pending local entries have been uploaded successfully.</li>
   </ul>
 
-  <h3>9. Reports and export</h3>
+  <h3>10. Reports and export</h3>
   <ul>
    <li>Monthly Attendance Summary shows attendance counts and does not use Worked Hours or OT as attendance columns.</li>
    <li>OT Report is restricted to OT-eligible employees.</li>
@@ -397,10 +407,10 @@ function renderRules(){
    <li>Dates are displayed in dd/mm/yyyy format.</li>
   </ul>
 
-  <h3>10. Data safety</h3>
+  <h3>11. Data safety</h3>
   <div class="ruleNote"><b>Important:</b> Do not delete, reset or migrate existing attendance data. Do not replace Supabase or rebuild database structure as part of a normal UI/rules change. Changes to calculation logic must be tested against existing records before release.</div>
 
-  <h3>11. Admin sections</h3>
+  <h3>12. Admin sections</h3>
   <ul>
    <li><b>Attendance:</b> daily register and monthly summary.</li>
    <li><b>Employees:</b> employee list and employee-specific normal timing settings.</li>
