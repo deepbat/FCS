@@ -63,15 +63,20 @@ function statusFor(e,date,rec,existing){
   if(isSunday(date))return 'Sunday';
   if(hol(date))return 'Holiday';
   if(!rec?.in_time||!rec?.out_time)return '';
+  const inMin=mins(rec.in_time);
+  // Short leave is allowed for a maximum of two hours. More than two hours
+  // late means half day. For a normal 9:00am start, half-day begins at 1:00pm.
+  let start=mins(ruleFor(e).normal_start)||540;
+  if(e.name==='Gautam')start=540;
+  if(e.name==='Rajan')start=480;
+  if(e.name==='Vakil Mehto')start=570;
+  if(!e.split_shift&&!isSunday(date)&&!hol(date)&&inMin>start+120)return 'Half Day';
   if(e.category==='Staff'){
-    const a=mins(rec.in_time),b=mins(rec.out_time);
-    const r=ruleFor(e);
-    const start=mins(r.normal_start)||540,end=mins(r.normal_end)||1065;
-    // Preserve the established Staff half-day windows while keeping them
-    // aligned if the configured Staff start/end times are changed.
+    const b=mins(rec.out_time),r=ruleFor(e);
+    const end=mins(r.normal_end)||1065;
     const startShift=start-540,endShift=end-1065;
-    if(a<=570+startShift&&b<=795+endShift)return 'Second Half Leave';
-    if(a>=825+startShift&&b>=1035+endShift)return 'First Half Leave';
+    if(inMin<=570+startShift&&b<=795+endShift)return 'Second Half Leave';
+    if(inMin>=825+startShift&&b>=1035+endShift)return 'First Half Leave';
   }
   return 'Present';
 }
