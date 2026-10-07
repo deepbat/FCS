@@ -196,6 +196,7 @@ async function editCell(tr,e,changed){
       d.ut=Number(c.ut_minutes)||0;
       d.sl=Number(c.sl_minutes)||0;
       d.ot=Number(c.ot_minutes)||0;
+      d.status=statusFor(e,date,d,null);
       adjustGrandTotals(before,d);
       markUnsaved();renderRowValues(tr,d);updateRegSummary(e,datesForMonth());updateGrandTotal();
     }catch(err){
@@ -265,6 +266,7 @@ async function editCard(card,e,changed){
       d.ut=Number(c.ut_minutes)||0;
       d.sl=Number(c.sl_minutes)||0;
       d.ot=Number(c.ot_minutes)||0;
+      d.status=statusFor(e,date,d,null);
     }catch(err){
       if(editSeq.get(key)!==seq)return;
       markUnsaved();const st=$('saveState');if(st){st.textContent='Calculation failed: '+err.message;st.className='saveState error'}
