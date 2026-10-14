@@ -95,6 +95,7 @@ function getDraft(date,id){
     sl:Number(r?.sl_minutes)||0,
     ot:Number(r?.ot_minutes)||0,
     status:statusFor(e,date,r,a),
+    note:String(a?.note||''),
     ut_override:r?.ut_override_minutes,
     sl_override:r?.sl_override_minutes,
     ot_override:r?.ot_override_minutes,
@@ -156,15 +157,15 @@ function renderRegister(){
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
  const rows=datesForMonth(),isSplit=e.split_shift&&!isVarinder(e);
- let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th><th>Action</th></tr></thead><tbody>';
+ let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th><th>Remarks</th><th>Action</th></tr></thead><tbody>';
  rows.forEach(date=>{
    const d=getDraft(date,e.id),rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
-   h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td><td><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></td></tr>'
+   h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td><td><input data-f="note" value="'+esc(d.note)+'" placeholder="Remarks"></td><td><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></td></tr>'
  });
  h+='</tbody>';$('regTable').innerHTML=h;
  $('regCards').innerHTML=rows.map(date=>{
    const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
-   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
+   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label><label class="remarkField">Remarks<input data-f="note" value="'+esc(d.note)+'" placeholder="Remarks"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
  }).join('');
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e,el))));
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e,el))));
@@ -470,11 +471,12 @@ async function saveAll(){
         p_status:status
       });
       if(error)throw error;
+      const noteResult=await db.from('attendance').update({note:d.note||null}).eq('work_date',d.date).eq('employee_id',d.id);if(noteResult.error)throw noteResult.error;
       dirtyDrafts.delete(key);saved++;continue;
     }
     if(!it||!(isVarinder(e)?finalOut:ot))throw new Error('Enter IN and OUT, or select an attendance status such as Present or Leave.');
     if(e.split_shift&&!isVarinder(e)&&(!it2||!ot2))throw new Error('both second-shift times are required');
-    if(!e.split_shift&&mins(ot)<mins(it)&&!['Driver','Gateman'].includes(e.category))throw new Error('OUT cannot be earlier than IN');
+    
     const firstOut=e.split_shift&&isVarinder(e)?(ot||'01:00'):ot;
     const secondIn=e.split_shift&&isVarinder(e)?'06:00':it2;
     const secondOut=e.split_shift&&isVarinder(e)?finalOut:ot2;
@@ -491,6 +493,7 @@ async function saveAll(){
       p_status:d.status||statusFor(e,d.date,d,null)
     });
     if(error)throw error;
+    const noteResult=await db.from('attendance').update({note:d.note||null}).eq('work_date',d.date).eq('employee_id',d.id);if(noteResult.error)throw noteResult.error;
     dirtyDrafts.delete(key);saved++;
    }catch(err){errors.push(label+': '+err.message)}
   }
@@ -514,8 +517,8 @@ function exportEmployee(){
  if(hasUnsaved){alert('Please save changes before exporting payroll data.');return}
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
-   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),'Net OT':fmtMin((Number(d.ot)||0)+(Number(d.ut)||0)-(Number(d.sl)||0)),Attendance:d.status}});
-   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Net OT','Attendance']});
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),'Net OT':fmtMin((Number(d.ot)||0)+(Number(d.ut)||0)-(Number(d.sl)||0)),Attendance:d.status,Remarks:d.note||''}});
+   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Net OT','Attendance','Remarks']});
    const personTotals={ot:0,ut:0,sl:0};
    rows.forEach(r=>{
      personTotals.ut+=parseAdj(r.UT)||0;
@@ -532,7 +535,7 @@ function exportEmployee(){
      'Net OT':fmtMin(personTotals.ot+personTotals.ut-personTotals.sl),
      Attendance:''
    }],{skipHeader:true,origin:-1});
-   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12},{wch:12},{wch:20}];
+   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12},{wch:12},{wch:20},{wch:32}];
    let name=(e.name||'Employee').replace(/[\\/?*\[\]:]/g,' ').slice(0,31)||'Employee',base=name,n=2;
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
