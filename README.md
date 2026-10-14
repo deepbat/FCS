@@ -57,7 +57,7 @@ For an evening/night start (18:00 or later):
 
 Rajan and Pemba's September source-register OT values are therefore treated as manual source values, not reconstructed from their overnight clock times.
 
-Satpal and other employees whose shift starts in the morning can still have an OUT after midnight; their elapsed duration is calculated across midnight normally.
+Employees may remain at work overnight. An OUT time earlier than IN is accepted as next-morning OUT, and elapsed duration is calculated across midnight. Example: 9:57am IN and 7:20am next-day OUT is 21h 23m elapsed.
 
 ## UT
 
@@ -149,6 +149,7 @@ Admin can:
 - view the monthly register
 - edit timings
 - edit UT/SL/OT
+- add remarks for any date
 - apply manual overrides
 - edit employee settings
 - edit category rules
@@ -235,6 +236,7 @@ Shows:
 - SL
 - OT
 - Attendance
+- Remarks
 
 Person-wise totals are shown.
 
