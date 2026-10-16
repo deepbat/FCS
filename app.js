@@ -9,7 +9,6 @@ let employees=[],saving=false;
 const queue=()=>{try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]')}catch{return[]}};
 const saveQueue=q=>localStorage.setItem(QUEUE_KEY,JSON.stringify(q));
 const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
-const minutes=v=>{if(!v)return null;const p=String(v).slice(0,5).split(':').map(Number);return p.length===2&&p.every(Number.isFinite)?p[0]*60+p[1]:null};
 const normalize=v=>{
  v=String(v||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');
  let m=v.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);
@@ -20,9 +19,7 @@ const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').c
 const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
 const displayToIso=v=>{const m=String(v||'').trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
 const setDateDisplay=()=>{const iso=$('workDate').value;$('workDateDisplay').value=isoToDisplay(iso)};
-
 const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pending sync':'Ready'};
-
 function selected(){return employees.find(e=>e.id===$('employee').value)}
 function isVarinder(e){return e?.name==='Varinder Pal'&&e?.split_shift}
 function renderEmployees(){
@@ -60,27 +57,15 @@ async function getHoliday(date){
  return !!data;
 }
 async function calculate(e,date,it,firstOut,secondIn=null,secondOut=null){
- const {data,error}=await db.rpc('calculate_attendance',{
-   p_employee_id:e.id,
-   p_work_date:date,
-   p_in_time:it,
-   p_out_time:firstOut,
-   p_in_time_2:secondIn,
-   p_out_time_2:secondOut
- });
+ const {data,error}=await db.rpc('calculate_attendance',{p_employee_id:e.id,p_work_date:date,p_in_time:it,p_out_time:firstOut,p_in_time_2:secondIn,p_out_time_2:secondOut});
  if(error)throw error;
  const c=Array.isArray(data)?data[0]:data;
  if(!c)throw new Error('No calculation returned.');
  return c;
 }
-// Entries are queued before any network request. The queue stores raw times, not
-// calculations, because the authoritative calculator and holiday table live in Supabase.
 let syncing=false;
 const entryKey=p=>p.work_date+'|'+p.employee_id;
-function enqueue(p){
- const q=queue().filter(x=>entryKey(x.entry||x.record)!==entryKey(p));
- q.push({entry:p});saveQueue(q);setSync();
-}
+function enqueue(p){const q=queue().filter(x=>entryKey(x.entry||x.record)!==entryKey(p));q.push({entry:p});saveQueue(q);setSync()}
 async function prepare(entry){
  const e=employees.find(x=>x.id===entry.employee_id);
  if(!e)throw new Error('Employee is no longer active; review this pending entry.');
@@ -90,75 +75,35 @@ async function prepare(entry){
  const secondIn=varinder?'06:00':(splitGeneric?entry.in_time_2:null);
  const secondOut=varinder?entry.out_time:(splitGeneric?entry.out_time_2:null);
  const c=await calculate(e,entry.work_date,entry.in_time,firstOut,secondIn,secondOut);
- const record={
-  client_id:entry.client_id,work_date:entry.work_date,employee_id:e.id,
-  in_time:entry.in_time,out_time:firstOut,
-  in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,
-  break_minutes:c.break_minutes,normal_work_minutes:c.normal_work_minutes,
-  ot_eligible:c.ot_eligible,ot_threshold_minutes:c.ot_threshold_minutes,
-  round_minutes:c.round_minutes,full_day_ot:c.full_day_ot,
-  total_elapsed_minutes:c.total_elapsed_minutes,worked_minutes:c.worked_minutes,
-  ut_minutes:c.ut_minutes,sl_minutes:c.sl_minutes,ot_minutes:c.ot_minutes,
-  updated_at:new Date().toISOString()
- };
- const attendance={work_date:entry.work_date,employee_id:e.id,status:sunday?'Sunday':holiday?'Holiday':'Present',updated_at:new Date().toISOString()};
- return {record,attendance};
+ return {record:{client_id:entry.client_id,work_date:entry.work_date,employee_id:e.id,in_time:entry.in_time,out_time:firstOut,in_time_2:e.split_shift?secondIn:null,out_time_2:e.split_shift?secondOut:null,break_minutes:c.break_minutes,normal_work_minutes:c.normal_work_minutes,ot_eligible:c.ot_eligible,ot_threshold_minutes:c.ot_threshold_minutes,round_minutes:c.round_minutes,full_day_ot:c.full_day_ot,total_elapsed_minutes:c.total_elapsed_minutes,worked_minutes:c.worked_minutes,ut_minutes:c.ut_minutes,sl_minutes:c.sl_minutes,ot_minutes:c.ot_minutes,updated_at:new Date().toISOString()},attendance:{work_date:entry.work_date,employee_id:e.id,status:sunday?'Sunday':holiday?'Holiday':'Present',updated_at:new Date().toISOString()}};
 }
 async function syncOne(p){
  const record=p.record;
- // One server-side transaction writes both tables. The same client_id is
- // retained across retries so duplicate queue delivery is idempotent.
- const {error}=await db.rpc('save_gate_attendance',{
-   p_client_id:record.client_id,
-   p_work_date:record.work_date,
-   p_employee_id:record.employee_id,
-   p_in_time:record.in_time,
-   p_out_time:record.out_time,
-   p_in_time_2:record.in_time_2,
-   p_out_time_2:record.out_time_2
- });
+ const {data,error}=await db.rpc('save_gate_attendance',{p_client_id:record.client_id,p_work_date:record.work_date,p_employee_id:record.employee_id,p_in_time:record.in_time,p_out_time:record.out_time,p_in_time_2:record.in_time_2,p_out_time_2:record.out_time_2});
  if(error)throw error;
+ return Array.isArray(data)?data[0]:data;
 }
 async function syncPending(){
  if(syncing||!navigator.onLine)return;
- syncing=true;
- let failed=0,conflict=false,firstError='';
+ syncing=true;let failed=0,firstError='';
  try{
-  // Remove only the item we successfully sent; do not overwrite entries queued mid-sync.
   for(const item of queue()){
    const current=queue().find(x=>x.entry?.client_id===item.entry?.client_id || (x.record?.client_id&&x.record.client_id===item.record?.client_id));
    if(!current)continue;
    try{
-    await syncOne(item.entry?await prepare(item.entry):item);
+    const result=await syncOne(item.entry?await prepare(item.entry):item);
     saveQueue(queue().filter(x=>x!==current && (x.entry?.client_id||x.record?.client_id)!==(current.entry?.client_id||current.record?.client_id)));
+    if(result?.superseded)console.info('Pending gate entry was superseded by an Admin correction.');
    }catch(err){
-    failed++;
-    const msg=String(err?.message||err||'Unknown sync error');
-    if(!firstError)firstError=msg;
-    if(/already exists on the server|different entry already exists on the server/i.test(msg))conflict=true;
-    console.warn('Pending entry was retained:',err);
+    failed++;const msg=String(err?.message||err||'Unknown sync error');if(!firstError)firstError=msg;console.warn('Pending entry was retained:',err);
    }
   }
  }finally{
-  syncing=false;
-  setSync();
-  if(conflict){
-    setMessage('Sync stopped: a different entry already exists on the server. Pending entry kept for admin review.',true);
-  }else if(failed){
-    setMessage('Sync failed: '+firstError+'. It will retry automatically.',true);
-  }
- }}
-function clearInputs(){
- $('inTime').value='';
- $('outTime').value='';
- if($('inTime2'))$('inTime2').value='';
- if($('outTime2'))$('outTime2').value='';
- const e=selected();
- if(e?.split_shift&&!isVarinder(e)){
-   if($('inTime2'))$('inTime2').value='1:00am';
-   if($('outTime2'))$('outTime2').value='6:00am';
+  syncing=false;setSync();
+  if(failed)setMessage('Sync failed: '+firstError+'. It will retry automatically.',true);
  }
 }
+function clearInputs(){$('inTime').value='';$('outTime').value='';if($('inTime2'))$('inTime2').value='';if($('outTime2'))$('outTime2').value='';const e=selected();if(e?.split_shift&&!isVarinder(e)){if($('inTime2'))$('inTime2').value='1:00am';if($('outTime2'))$('outTime2').value='6:00am'}}
 async function save(){
  if(saving)return;
  const e=selected(),date=$('workDate').value,it=normalize($('inTime').value),out=normalize($('outTime').value);
@@ -166,7 +111,6 @@ async function save(){
  if(!e||!date)return setMessage('Select employee and date.',true);
  if(!it||!out)return setMessage('Enter valid IN and OUT times.',true);
  if(splitGeneric&&(!it2||!out2))return setMessage('Enter both second-shift IN and OUT times.',true);
- if(!e.split_shift&&minutes(out)<minutes(it)&&!['Driver','Gateman'].includes(e.category))return setMessage('OUT cannot be earlier than IN.',true);
  saving=true;$('saveBtn').disabled=true;
  try{
   const entry={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:out,in_time_2:it2,out_time_2:out2};
