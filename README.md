@@ -2,373 +2,150 @@
 
 Mobile-first attendance and overtime PWA for FCS.
 
-## Production architecture
+## 1. System of record
 
-- Front end: static PWA hosted from GitHub Pages
-- Repository: `deepbat/FCS`
-- Backend: Supabase Postgres + Row Level Security
-- Admin authentication: Supabase Auth
-- Gate device: publishable Supabase key + restricted anonymous database access
-- Offline gate queue: browser localStorage
-- Authoritative attendance calculation: Supabase `calculate_attendance()`
-- Authoritative saves: server-side `save_gate_attendance()` and `save_admin_attendance()`
+- **Frontend:** GitHub Pages PWA (`deepbat/FCS`)
+- **Database/auth:** Supabase Postgres + RLS + Supabase Auth for Admin
+- **Gate:** publishable Supabase key with restricted anonymous access; no gate login
+- **Offline:** raw gate entries are queued in browser localStorage and retried automatically
+- **Calculation authority:** `public.calculate_attendance()`
+- **Save authority:** `save_gate_attendance()` and `save_admin_attendance()`; timing + attendance are saved atomically
+- Browser calculations are display helpers only. **Supabase is the source of truth for OT/UT/SL/status.**
 
-The browser must not be treated as the source of truth for calculated OT/UT/SL.
+## 2. Employees and normal schedules
 
-## Employees and working rules
-
-| Code | Employee | Category | Normal rule |
+| Code | Employee | Category | Normal schedule / rule |
 |---|---|---|---|
-| 001 | Deepak Batra | Staff | 9am–5:45pm, 45m break, no OT |
-| 002 | Anita Pal | Staff | 9am–5:45pm, 45m break, no OT |
-| 003 | Harjit Singh | Staff | 9am–5:45pm, 45m break, no OT |
-| 004 | Gautam | Gateman | 9am normal reference, OT eligible; special early-arrival rule |
-| 005 | Sabi | Driver | 9am–5:45pm, 45m break, OT eligible |
-| 006 | Umesh | Gardener | 8:30am–5:10pm, 40m break, no OT |
-| 007 | Varinder Pal | Gateman | Split shift, 480m duty, 30m rounding |
-| 008 | Barkha | Gateman | 495m elapsed requirement including 15m break |
-| 009 | Rajan | Gateman | 480m normal duty; night-duty OT is recorded manually |
-| 010 | Pemba Tamang | Gateman | 480m normal duty; night-duty OT is recorded manually |
+| 001 | Deepak Batra | Staff | 9:00am–5:45pm, 45m break, no OT |
+| 002 | Anita Pal | Staff | 9:00am–5:45pm, 45m break, no OT |
+| 003 | Harjit Singh | Staff | 9:00am–5:45pm, 45m break, no OT |
+| 004 | Gautam | Gateman | 9:00am reference; OT eligible; special UT rule |
+| 005 | Sabi | Driver | 9:00am–5:45pm, 45m break; OT eligible |
+| 006 | Umesh | Gardener | 8:30am–5:10pm, 40m break; no OT |
+| 007 | Varinder Pal | Gateman | Split shift; 480m duty; 30m rounding; no break |
+| 008 | Barkha | Gateman | 495m elapsed full day = 480m duty + 15m break |
+| 009 | Rajan | Gateman | 8:00am normal reference; night-duty/source OT is manual where required |
+| 010 | Pemba Tamang | Gateman | 8:00pm night duty when applicable; source/night OT rules below |
 | 011 | Ajay Kumar | Driver | 8:20am–5:00pm, 520m duty, 40m break; OT eligible |
-| 012 | Satpal Singh | Driver | 9am–5:45pm, 45m break, OT eligible |
+| 012 | Satpal Singh | Driver | 9:00am–5:45pm, 45m break; OT eligible |
 
-Category rules are stored in Supabase and can be edited by Admin. Employee-specific values are stored on the employee record.
+Employee-specific settings override category defaults. Category rules are maintained by Admin in Supabase.
 
-## OT
+## 3. UT, late arrival, SL and Half Day
 
-- OT eligible: Gatemen and Drivers.
-- Staff and Gardener do not receive automatic OT.
-- On a normal day, up to and including 15 extra minutes gives 0 OT.
-- 16 or more extra minutes gives the actual extra minutes.
-- Sundays and holidays: eligible Gatemen/Drivers receive the full elapsed duty time as OT, without normal break deduction.
-- Sunday/holiday elapsed time is not globally rounded. Varinder's own 30-minute rounding rule remains separate.
+**UT (early arrival)** is based on the applicable employee/category start rule:
 
-### Night duty
-
-Some employees have overnight duties recorded in the physical register.
-
-For an evening/night start (18:00 or later):
-
-- UT and SL are not calculated as ordinary morning late-arrival/leave.
-- Ordinary 9am–5:45pm OT calculation is not applied.
-- Where OT comes from the physical register, it is entered as an explicit OT override.
-- Existing manual OT overrides are preserved when IN/OUT is edited.
-- This prevents an evening IN such as 7:50pm from being interpreted as hundreds of minutes of short leave or phantom OT.
-
-Rajan and Pemba's September source-register OT values are therefore treated as manual source values, not reconstructed from their overnight clock times.
-
-Employees may remain at work overnight. An OUT time earlier than IN is accepted as next-morning OUT, and elapsed duration is calculated across midnight. Example: 9:57am IN and 7:20am next-day OUT is 21h 23m elapsed.
-
-## UT
-
-UT is calculated from the employee's applicable morning start rule.
-
-Known rules:
-
-- Gautam: official duty start is 7:30am. Voluntary arrival before 7:30am does not create additional UT. At 8:20am, UT is 40m.
-- Gatemen: early arrival before 8:40am follows the established 30-minute UT rule.
-- Drivers: early arrival before 8:40am follows the established UT rule.
+- Gautam: 9:00am is the normal reference, but early-call duty starts at 7:30am. Arrival before 7:30am still gets the applicable 90m UT, not extra UT. Example 8:20am = 40m UT.
+- Gateman: before 8:40am, established 30-minute UT rule applies.
+- Driver: before 8:40am, UT is calculated to the 9:00am reference.
 - Gardener: normal start is 8:30am.
 
-## SL and Half Day
+**SL (Short Leave):**
 
-SL is calculated separately from UT.
+- Maximum SL is **2 hours**.
+- Normal late-arrival start is the employee's configured start; normally 9:00am, Gardener 8:30am, Rajan 8:00am, and Vakil Mehto 9:30am where that special rule applies.
+- If late by **more than 2 hours**, **SL = 0 and attendance = Half Day**. Half Day is the deduction; it must never be combined with 2h SL.
+- For a normal 9:00am start, Half Day cutoff is **1:00pm**.
+- For an OT-eligible employee arriving more than 2h late but before the cutoff, time from actual IN to the cutoff is OT, subject to the normal 15m OT threshold.
+- Example: Satpal IN 12:23pm → Half Day, SL 0, 12:23pm–1:00pm = **37m OT**. 1:00pm–1:45pm is his break; his second working period starts at **1:45pm**.
+- At exactly 2h late: SL can be 2h. At 2h 1m late: Half Day applies.
+- Evening/night-duty IN does not become morning SL.
+- Manual SL overrides take precedence.
 
-- Short Leave is allowed for a maximum of 2 hours.
-- Gardener late arrival is measured against 8:30am.
-- Other normal employees are measured against their applicable normal start time, normally 9am.
-- Gautam follows his specific 9am normal reference for late arrival while retaining his separate early-call UT rule.
-- If an employee is more than 2 hours late, SL becomes **0** and attendance is marked **Half Day**. Half Day is the attendance deduction and must not be combined with SL.
-- For a normal 9am start, the half-day cutoff is 1pm.
-- For an OT-eligible employee who is more than 2 hours late but arrives before the half-day cutoff, the time from IN until the half-day cutoff is added as OT, subject to the normal 15-minute OT threshold.
-- Example: Satpal Singh IN at 12:23pm is 3h 23m late. Attendance is Half Day, SL is **0**, and 12:23pm to 1:00pm gives **37m OT**. The normal 1:00pm–1:45pm break is not working time, so the second working period starts at 1:45pm.
-- A 2h 1m late arrival is already Half Day. For an OT-eligible employee, the remaining time until the half-day cutoff is treated as OT, subject to the 15-minute threshold.
-- Evening/night-duty entries do not receive morning SL merely because their IN time is after 6pm.
-- Manual SL overrides are preserved.
+## 4. OT
 
-## Barkha
+- **OT eligible:** Gatemen and Drivers.
+- **No automatic OT:** Staff and Gardener.
+- Normal-day extra time: **15m or less = 0 OT; 16m+ = actual extra minutes.**
+- Normal OT end is the configured employee/category end time: normally 5:45pm; Ajay Kumar 5:00pm.
+- Sunday/holiday: eligible Gatemen/Drivers receive the full elapsed duty time as OT, with no normal break deduction. Varinder's own 30m rounding remains separate.
+- Manual OT overrides are preserved until a timing edit clears them; after a timing edit, explicitly re-enter any required manual exception.
 
-Barkha's full-day requirement is:
+## 5. Special employees
 
-- 8 hours duty
-- 15 minutes break
-- 495 minutes elapsed
+### Gautam
+- Normal late reference: 9:00am.
+- Early UT: before 7:30am → 90m; 7:30am–9:00am → UT up to 9:00am.
+- Late arrival after 9:00am produces SL until the 2h limit; beyond 2h → Half Day.
 
-## Varinder Pal split shift
+### Varinder Pal — split shift
+- First shift: recorded evening IN → **1:00am**.
+- Second shift: **6:00am** → recorded final OUT.
+- No break deduction; normal duty 480m; round down to 30m blocks.
+- Generic split-shift employees use their recorded second IN/OUT fields.
 
-Varinder is a split-shift Gateman.
+### Barkha
+- Full day = **480m duty + 15m break = 495m elapsed**.
 
-- First shift starts from the recorded evening IN.
-- First shift ends at 1:00am.
-- Second shift starts at 6:00am.
-- Final OUT is the recorded morning OUT.
-- No break deduction.
-- 480m normal duty.
-- 30-minute rounding.
-- Sunday/holiday rules still apply.
+### Ajay Kumar
+- Normal start 8:20am, end 5:00pm, 520m duty, 40m break.
+- Late arrival is measured from 8:20am; OT reference end is 5:00pm.
 
-The database calculation engine handles midnight crossing and both shifts.
+### Rajan / Pemba Tamang night duty
+- Overnight physical-register values may be source/manual values.
+- Evening IN (18:00 or later) is not treated as morning late arrival.
+- Pemba Sunday night-duty handling follows the configured 8:00pm–9:00am rule; early arrival before 8:00pm does not create extra OT and time after 9:00am is not automatic OT.
+- Where the physical register is authoritative, use explicit OT override rather than inventing OT from an overnight clock difference.
+- An OUT earlier than IN is allowed for overnight duty and is calculated across midnight.
 
-## Attendance statuses
+## 6. Attendance statuses
 
-Supported statuses include:
+Supported: **Present, Absent, Leave, Half Day, First Half Leave, Second Half Leave, Full Day Leave, Holiday, Sunday.**
 
-- Present
-- Absent
-- Leave
-- Half Day
-- First Half Leave
-- Second Half Leave
-- Full Day Leave
-- Holiday
-- Sunday
+Half Day from >2h lateness is automatic unless an explicit Admin status/override is intentionally applied. Staff half-day/leave rules remain based on configured Staff timings.
 
-Staff automatic half-day detection follows the established Staff rule and remains aligned with configured Staff start/end times.
+## 7. Gate and Admin workflow
 
-## Gate workflow
+**Gate:** select date → employee → IN/OUT (and second shift when required) → Save. The raw entry is retained locally before network sync. Offline/failed entries stay queued and retry automatically.
 
-1. Select date.
-2. Select employee.
-3. Enter IN and OUT.
-4. Enter second-shift timings when required.
-5. Press Save.
-6. The raw entry is immediately retained on the phone.
-7. When online, the server-side save writes the timing and attendance together.
-8. If the network is unavailable, the entry remains in the offline queue.
-9. Failed entries remain pending and are retried.
-10. If Admin has already corrected an employee/date, an older queued gate entry is treated as stale. The server record remains authoritative, the queued entry is acknowledged and removed, and the gate app does not show a conflict error.
+If Admin has already corrected the same employee/date, the older queued gate entry is **stale**: the server record wins, the queued entry is acknowledged/removed, and the gate user is not asked to resolve a conflict. Identical retries are idempotent. A gate entry never overwrites an existing server record.
 
-The gate does not display previous attendance records.
+**Admin:** authenticated users can view/edit the register, timings, UT/SL/OT, remarks, employee/category rules and holidays; save/delete entries; print; and export Excel.
 
-## Admin workflow
+## 8. Manual overrides
 
-Admin uses Supabase Auth.
-
-Admin can:
-
-- view the monthly register
-- edit timings
-- edit UT/SL/OT
-- add remarks for any date
-- apply manual overrides
-- edit employee settings
-- edit category rules
-- maintain holidays
-- save changes
-- delete an entry explicitly
-- print
-- export Excel
-- view monthly summary
-
-Unsaved changes are protected against accidental month changes and browser navigation.
-
-## Manual overrides
-
-UT, SL and OT overrides are explicit values stored in:
+Stored fields:
 
 - `ut_override_minutes`
 - `sl_override_minutes`
 - `ot_override_minutes`
 
-When an override exists, it takes precedence over the calculated value.
+An override replaces the calculated value. Editing IN/OUT clears UT/SL/OT overrides for that row and recalculates, preventing stale payroll values. Re-enter a manual override afterward when an exception is intended.
 
-Changing IN/OUT clears the existing UT/SL/OT overrides for that row and recalculates them from the new timings. This prevents stale payroll values from surviving a timing change. If an exception is required, re-enter the manual UT/SL/OT override explicitly after changing the timing.
+## 9. Calculation and data integrity
 
-This is important for source-register values such as Rajan and Pemba night-duty OT.
+`calculate_attendance()` is the single calculation engine for UT, SL, OT, elapsed/worked minutes, break, normal work, OT eligibility/threshold, rounding, split shifts, midnight crossing and Sunday/holiday OT. The `daily_records` trigger uses the same calculator; explicit overrides are applied afterward.
 
-## Calculation architecture
+Database protections include employee/date uniqueness, foreign keys, RLS, restricted anonymous writes, no anonymous OT/UT/SL override injection, fixed-search-path server functions, atomic gate/Admin saves, and offline retry. Never weaken RLS to solve a UI problem.
 
-There is one authoritative calculation function:
+## 10. Holidays and reports
 
-`public.calculate_attendance()`
+Holidays are stored in `public.holidays`; Admin manages them. Current known holiday: **02/10/2026 — Gandhi Jayanti**.
 
-It calculates:
+Attendance Register shows Date, IN, UT, OUT, SL, OT, Attendance and Remarks, with person totals and synchronized grand totals. Excel has one worksheet per active employee with person TOTAL rows. Export is blocked while changes are unsaved. Print is A4-oriented.
 
-- UT
-- SL
-- OT
-- elapsed time
-- worked time
-- break
-- normal working minutes
-- OT eligibility
-- OT threshold
-- rounding
-- Sunday/holiday full-day OT
+## 11. Historical data policy
 
-The `daily_records` trigger invokes the same calculator whenever a record is written.
+Do **not** automatically rewrite historical payroll data because a newer formula differs. September contains source-register/manual values, especially night-duty OT and some Sunday values, that must be preserved unless explicitly corrected.
 
-Manual overrides are applied after calculation.
-
-## Atomic saves
-
-Gate and Admin now use server-side save functions:
-
-- `save_gate_attendance()`
-- `save_admin_attendance()`
-
-Each save writes the timing record and attendance record within one database transaction.
-
-This removes the previous client-side two-step write problem where one table could succeed while the second failed.
-
-## Holiday handling
-
-Holiday data is stored in `public.holidays`.
-
-Current holiday:
-
-- 02/10/2026 — Gandhi Jayanti
-
-The gate can read the holiday calendar, while only authenticated Admin users can manage holidays.
-
-Holiday detection is also performed server-side by the authoritative calculator/save functions.
-
-## Reports
-
-### Attendance Register
-
-Shows:
-
-- Date
-- IN
-- UT
-- OUT
-- SL
-- OT
-- Attendance
-- Remarks
-
-Person-wise totals are shown.
-
-The register also maintains an overall Grand Total and keeps it synchronized with the actual displayed rows.
-
-### Excel
-
-Excel export contains:
-
-- one worksheet per active employee
-- person-wise TOTAL row
-- no unnecessary overall Grand Total worksheet
-
-Export is blocked while there are unsaved changes.
-
-Grand totals are recalculated from the same draft rows used for the employee totals rather than maintained as a fragile incremental cache.
-
-### Printing
-
-The register has print-specific formatting for A4 output and hides editing controls.
-
-## Data integrity
-
-Important database protections include:
-
-- unique employee/date records
-- employee foreign keys
-- RLS
-- restricted anonymous writes
-- anonymous gate writes cannot supply OT/UT/SL overrides
-- server-side calculation
-- server-side atomic saves
-- offline retry instead of silent loss
-- stale queued-entry handling when Admin has already corrected the same employee/date
-
-Existing backup data is retained.
-
-## Historical data policy
-
-Historical attendance is not automatically rewritten merely because a newer formula produces a different result.
-
-The September data contains some source-register/manual values that intentionally differ from a pure clock-time calculation, especially night-duty OT and some Sunday values.
-
-These values must be treated as historical source data unless an explicit correction is made.
-
-Known incomplete historical records requiring manual repair:
+Known incomplete records:
 
 - Sabi — 11/09/2026 — IN 8:58am, OUT missing
 - Rajan — 22/09/2026 — IN 7:48am, OUT missing
 
-An incomplete record is not treated as a complete working day.
+Incomplete records are not complete working days.
 
-## Security
+## 12. Security, backups and development
 
-- Never place a Supabase secret/service-role key in the browser.
-- The repository uses the Supabase publishable key.
-- Admin operations require Supabase Auth.
-- Gate database access is restricted by RLS and dedicated server-side functions.
-- Anonymous clients cannot supply OT/UT/SL overrides.
-- Server-side functions use a fixed search path.
-- Do not weaken RLS to solve a UI problem.
+- Never expose a Supabase secret/service-role key in the browser.
+- Admin operations require Supabase Auth; gate uses restricted publishable-key access.
+- Preserve existing backups.
+- Before structural or historical changes: verify backup → inspect affected rows → test expected results independently → migrate → verify.
+- Never truncate/reset production or change historical payroll merely to make a test pass.
+- Production migration history exists in Supabase; do not recreate missing historical SQL by guessing.
 
-## Offline behaviour
+## 13. Minimum calculation tests
 
-The gate stores raw timings locally before attempting network synchronization.
+Any calculation change must independently test: normal day, early/late arrival, early departure, 15m and 16m OT boundaries, Sunday, holiday, Gateman, Driver, Staff, Gardener, Gautam, Barkha, Varinder split shift, Ajay Kumar, overnight OUT, evening/night IN, missing OUT, manual overrides, rapid edits, Excel totals and print totals.
 
-Pending entries:
-
-- retain their client ID
-- are retried automatically
-- are not silently discarded
-- never overwrite an existing server entry for the same employee/date
-
-Do not clear browser storage while entries are pending.
-
-## Database migrations
-
-Production currently contains a migration history in Supabase.
-
-The four hardening migrations applied during this reliability pass are recorded in the Supabase production migration history. The repository still does not contain the complete historical SQL for the earlier production migrations. It should not be reconstructed by guessing. A proper baseline can be captured from the live project with Supabase's migration/schema pull workflow before attempting a fresh-project rebuild.
-
-## Backups and recovery
-
-Before any future structural or historical-data change:
-
-1. verify the latest database backup
-2. inspect affected rows
-3. test the change against the calculation function
-4. use a migration for schema/function/policy changes
-5. never truncate or reset the production database
-
-## Testing requirements
-
-Any change to attendance calculations must test at least:
-
-- normal full day
-- early arrival
-- late arrival
-- early departure
-- 15m OT boundary
-- 16m OT boundary
-- Sunday
-- holiday
-- Gateman
-- Driver
-- Staff
-- Gardener
-- Barkha
-- Gautam
-- Varinder split shift
-- overnight OUT after midnight
-- evening/night IN
-- missing OUT
-- manual overrides
-- rapid edits
-- Excel totals
-- print totals
-
-The production calculator must not be tested only against itself. Expected results should be independently derived for important boundary cases.
-
-## Known limitations
-
-- The gate is intentionally simple and does not require a user login.
-- Night-duty OT from the physical source register is represented through explicit manual OT overrides rather than inferred from the ordinary daytime OT formula.
-- Employee-specific schedules are authoritative where configured. Ajay Kumar is 8:20am–5:00pm with 520m duty and 40m break; his late arrival is minute-for-minute SL from 8:20am and his OT reference end is 5:00pm.
-- The repository's complete historical Supabase migration SQL has not yet been reconstructed; do not attempt to manufacture it from migration names alone.
-- Historical source-register discrepancies are preserved rather than silently rewritten.
-
-## Safe development rule
-
-For future changes:
-
-**Inspect → test → migrate → verify → commit.**
-
-Do not patch production attendance data simply to make a test pass.
+**Safe rule: Inspect → test → migrate → verify → commit.**
