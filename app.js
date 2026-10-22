@@ -56,6 +56,11 @@ async function getHoliday(date){
  if(error)throw error;
  return !!data;
 }
+async function serverEntryExists(date,employeeId){
+ const {data,error}=await db.from('daily_records').select('id').eq('work_date',date).eq('employee_id',employeeId).limit(1);
+ if(error)throw error;
+ return Array.isArray(data)&&data.length>0;
+}
 async function calculate(e,date,it,firstOut,secondIn=null,secondOut=null){
  const {data,error}=await db.rpc('calculate_attendance',{p_employee_id:e.id,p_work_date:date,p_in_time:it,p_out_time:firstOut,p_in_time_2:secondIn,p_out_time_2:secondOut});
  if(error)throw error;
@@ -65,7 +70,11 @@ async function calculate(e,date,it,firstOut,secondIn=null,secondOut=null){
 }
 let syncing=false;
 const entryKey=p=>p.work_date+'|'+p.employee_id;
-function enqueue(p){const q=queue().filter(x=>entryKey(x.entry||x.record)!==entryKey(p));q.push({entry:p});saveQueue(q);setSync()}
+function enqueue(p){
+ const q=queue();
+ if(q.some(x=>entryKey(x.entry||x.record)===entryKey(p)))return false;
+ q.push({entry:p});saveQueue(q);setSync();return true;
+}
 async function prepare(entry){
  const e=employees.find(x=>x.id===entry.employee_id);
  if(!e)throw new Error('Employee is no longer active; review this pending entry.');
@@ -113,8 +122,20 @@ async function save(){
  if(splitGeneric&&(!it2||!out2))return setMessage('Enter both second-shift IN and OUT times.',true);
  saving=true;$('saveBtn').disabled=true;
  try{
+  const key=date+'|'+e.id;
+  if(queue().some(x=>entryKey(x.entry||x.record)===key)){
+    setMessage('This employee/date is already pending sync. The gate entry cannot be entered again.',true);return;
+  }
+  if(!isVarinder(e)&&e.name!=='Bam Bahadur'){
+    if(await serverEntryExists(date,e.id)){
+      setMessage('Attendance already exists for this employee/date. Gate cannot change it. Use Admin for any correction.',true);return;
+    }
+  }
   const entry={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:out,in_time_2:it2,out_time_2:out2};
-  enqueue(entry);clearInputs();setMessage('Saved on this phone. Sync pending.');
+  if(!enqueue(entry)){
+    setMessage('This employee/date is already pending sync. The gate entry cannot be entered again.',true);return;
+  }
+  clearInputs();setMessage('Saved on this phone. Sync pending.');
   if(navigator.onLine)await syncPending();
   if(!queue().some(x=>x.entry?.client_id===entry.client_id))setMessage('Saved successfully.');
  }catch(err){setMessage('Could not save on this phone: '+err.message,true)}
