@@ -149,17 +149,3 @@ Incomplete records are not complete working days.
 Any calculation change must independently test: normal day, early/late arrival, early departure, 15m and 16m OT boundaries, Sunday, holiday, Gateman, Driver, Staff, Gardener, Gautam, Barkha, Varinder split shift, Ajay Kumar, overnight OUT, evening/night IN, missing OUT, manual overrides, rapid edits, Excel totals and print totals.
 
 **Safe rule: Inspect → test → migrate → verify → commit.**
-
-
-## Admin interface improvements (30/10/2026)
-
-- Expected shift information appears beneath employee name in register view.
-- All Staff Day View displays active employees and attendance metrics for a selected date.
-- Missing / Incomplete finder checks past dates for missing records, missing OUT, blank status, and timings without status.
-- Monthly Summary includes OT, UT, SL, Net OT, and a grand total.
-- Save Changes asks for review of changed attendance rows and old/new UT, SL, and OT values.
-- Admin register time inputs display in 12-hour style while normalizing values to existing stored 24-hour format.
-- Mobile cards and future dates have improved visual handling.
-- Admin theme color now matches app styling and manifest.
-
-These are interface-level changes. Existing Supabase tables, data, calculations, and attendance rules remain unchanged.
