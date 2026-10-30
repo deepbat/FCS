@@ -16,7 +16,7 @@ const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return String(Math.floor
 const mins=t=>{if(!t)return null;const p=String(t).slice(0,5).split(':').map(Number);return p[0]*60+p[1]};
 const time=t=>t?String(t).slice(0,5):'';
 const time12=t=>{const v=time(t);if(!v)return '—';const [hh,mm]=v.split(':').map(Number);return ((hh%12)||12)+(mm?':'+String(mm).padStart(2,'0'):'')+(hh<12?'am':'pm')};
-const shiftLabel=e=>{const r=ruleFor(e),start=e.normal_start_minutes!=null?fmtMin(e.normal_start_minutes):r.normal_start,end=e.normal_end_minutes!=null?fmtMin(e.normal_end_minutes):r.normal_end,br=e.break_minutes!=null?e.break_minutes:r.break_minutes;return time12(start)+' – '+time12(end)+' · '+(Number(br)||0)+'m break'};
+const shiftLabel=e=>{if(e?.name==='Pemba Tamang')return '8:00pm – 4:00am · 8h duty, no break';const r=ruleFor(e),start=e.normal_start_minutes!=null?fmtMin(e.normal_start_minutes):r.normal_start,end=e.normal_end_minutes!=null?fmtMin(e.normal_end_minutes):r.normal_end,br=e.break_minutes!=null?e.break_minutes:r.break_minutes;return time12(start)+' – '+time12(end)+' · '+(Number(br)||0)+'m break'};
 const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+(m[2]||0);if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
 const range=m=>{const [y,mo]=m.split('-').map(Number),nmo=mo===12?1:mo+1,ny=mo===12?y+1:y;return [m+'-01',ny+'-'+String(nmo).padStart(2,'0')+'-01']};
 function emp(id){return employeeMap.get(id)}
@@ -66,13 +66,21 @@ function statusFor(e,date,rec,existing){
   if(hol(date))return 'Holiday';
   if(!rec?.in_time||!rec?.out_time)return '';
   const inMin=mins(rec.in_time);
+  // Pemba's evening/night duty is not late against the generic 9:00am Gateman start.
+  // More than 8 hours elapsed duty earns Present; shorter duty remains subject to the
+  // existing Half Day rule below.
+  if(e.name==='Pemba Tamang' && inMin>=18*60 && rec.out_time){
+    let elapsed=mins(rec.out_time)-inMin;
+    if(elapsed<0)elapsed+=1440;
+    if(elapsed>480)return 'Present';
+  }
   // Short leave is allowed for a maximum of two hours. More than two hours
   // late means half day. For a normal 9:00am start, half-day begins at 1:00pm.
   let start=mins(ruleFor(e).normal_start)||540;
   if(e.name==='Gautam')start=540;
   if(e.name==='Rajan')start=480;
   if(e.name==='Vakil Mehto')start=570;
-  if(!e.split_shift&&!isSunday(date)&&!hol(date)&&inMin>start+120)return 'Half Day';
+  if(!e.split_shift && e.name!=='Pemba Tamang' && !isSunday(date)&&!hol(date)&&inMin>start+120)return 'Half Day';
   if(e.category==='Staff'){
     const b=mins(rec.out_time),r=ruleFor(e);
     const end=mins(r.normal_end)||1065;
@@ -292,7 +300,7 @@ function renderAllStaffDayView(){
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
  $('dayViewBtn').onclick=renderAllStaffDayView;$('missingBtn').onclick=renderMissingFinder;
  const render=()=>{const date=$('allStaffDate').value;let h='<table><thead><tr><th>Employee</th><th>Expected Shift</th><th>IN</th><th>OUT</th><th>Status</th><th>UT</th><th>SL</th><th>OT</th></tr></thead><tbody>';
- active.forEach(e=>{const d=getDraft(date,e.id);let st=d.status||statusFor(e,date,d,d.attendance);if(!d.record&&!d.attendance)st='Missing';else if(st==='Present'&&d.in_time){const sched=mins(ruleFor(e).normal_start)||540;if(mins(d.in_time)>sched)st='Late'}h+='<tr><td>'+esc(e.name)+'</td><td>'+esc(shiftLabel(e))+'</td><td>'+esc(time12(d.in_time))+'</td><td>'+esc(time12(isVarinder(e)?d.final_out:d.out_time))+'</td><td>'+esc(st||'Missing')+'</td><td>'+fmtMin(d.ut)+'</td><td>'+fmtMin(d.sl)+'</td><td>'+fmtMin(d.ot)+'</td></tr>'});
+ active.forEach(e=>{const d=getDraft(date,e.id);let st=d.status||statusFor(e,date,d,d.attendance);if(!d.record&&!d.attendance)st='Missing';else if(st==='Present'&&d.in_time&&!e.split_shift){const sched=mins(ruleFor(e).normal_start)||540;if(mins(d.in_time)>sched)st='Late'}h+='<tr><td>'+esc(e.name)+'</td><td>'+esc(shiftLabel(e))+'</td><td>'+esc(time12(d.in_time))+'</td><td>'+esc(time12(isVarinder(e)?d.final_out:d.out_time))+'</td><td>'+esc(st||'Missing')+'</td><td>'+fmtMin(d.ut)+'</td><td>'+fmtMin(d.sl)+'</td><td>'+fmtMin(d.ot)+'</td></tr>'});
  h+='</tbody></table>';$('allStaffRows').innerHTML=h;};
  $('allStaffDate').onchange=render;render();
 }
