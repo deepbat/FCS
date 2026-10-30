@@ -15,7 +15,9 @@ const fmtDate=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?
 const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')};
 const mins=t=>{if(!t)return null;const p=String(t).slice(0,5).split(':').map(Number);return p[0]*60+p[1]};
 const time=t=>t?String(t).slice(0,5):'';
-const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+m[2];if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
+const time12=t=>{const v=time(t);if(!v)return '—';const [hh,mm]=v.split(':').map(Number);return ((hh%12)||12)+(mm?':'+String(mm).padStart(2,'0'):'')+(hh<12?'am':'pm')};
+const shiftLabel=e=>{const r=ruleFor(e),start=e.normal_start_minutes!=null?fmtMin(e.normal_start_minutes):r.normal_start,end=e.normal_end_minutes!=null?fmtMin(e.normal_end_minutes):r.normal_end,br=e.break_minutes!=null?e.break_minutes:r.break_minutes;return time12(start)+' – '+time12(end)+' · '+(Number(br)||0)+'m break'};
+const normalize=t=>{t=String(t||'').trim().toLowerCase().replace(/\s+/g,'').replace(/\./g,':');let m=t.match(/^(\d{1,2}):(\d{1,2})(am|pm)?$/);if(m){let h=+m[1],n=+(m[2]||0);if(n>59)return '';if(m[3]){if(h<1||h>12)return '';if(m[3]==='am'&&h===12)h=0;if(m[3]==='pm'&&h!==12)h+=12}else if(h>23)return '';return String(h).padStart(2,'0')+':'+String(n).padStart(2,'0')}m=t.match(/^(\d{1,2})(\d{2})$/);return m&&+m[1]<=23&&+m[2]<=59?String(+m[1]).padStart(2,'0')+':'+m[2]:/^\d{1,2}$/.test(t)&&+t<=23?String(+t).padStart(2,'0')+':00':''};
 const range=m=>{const [y,mo]=m.split('-').map(Number),nmo=mo===12?1:mo+1,ny=mo===12?y+1:y;return [m+'-01',ny+'-'+String(nmo).padStart(2,'0')+'-01']};
 function emp(id){return employeeMap.get(id)}
 function hol(date){return holidayMap.get(date)}
@@ -132,7 +134,7 @@ function shell(user){
 root.innerHTML='<div class="app"><div class="top"><div><h1>FCS Attendance</h1><div class="muted">'+esc(user.email||'')+'</div></div><div><button id="logout" class="btn">Logout</button></div></div><div class="card savebar"><button id="saveAll" class="btn primary">Save Changes</button><span id="saveState" class="saveState">All changes saved</span></div><div class="tabs"><button class="btn active" data-tab="attendance">Attendance</button><button class="btn" data-tab="employees">Employees</button><button class="btn" data-tab="holidays">Holidays</button><button class="btn" data-tab="settings">Settings</button><button class="btn" data-tab="rules">Rules / README</button></div><section id="attendanceSection"></section><section id="employeesSection" class="hidden"></section><section id="holidaysSection" class="hidden"></section><section id="settingsSection" class="hidden"></section><section id="rulesSection" class="hidden"></section></div>';
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 $('logout').onclick=async()=>{await db.auth.signOut();location.href='./admin.html'};
-$('saveAll').onclick=saveAll;
+$('saveAll').onclick=saveAllWithReview;
 renderAttendance();renderEmployees();renderHolidays();renderSettings();renderRules();
 }
 function switchTab(t){currentTab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));['attendance','employees','holidays','settings','rules'].forEach(x=>document.getElementById(x+'Section').classList.toggle('hidden',x!==t));}
@@ -143,7 +145,7 @@ $('summaryMode').onclick=()=>{currentMode='summary';$('summaryMode').classList.a
 renderRegister();
 }
 function monthToolbar(){
-return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
+return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button><button id="dayViewBtn" class="btn">All Staff Day View</button><button id="missingBtn" class="btn">Missing / Incomplete</button></div>'
 }
 function datesForMonth(){
  const [start,end]=range(month);
@@ -155,17 +157,19 @@ function renderRegister(){
  $('month').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;activeEmployee=0;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderRegister()};
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
+ $('dayViewBtn').onclick=()=>renderAllStaffDayView();
+ $('missingBtn').onclick=()=>renderMissingFinder();
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
  const rows=datesForMonth(),isSplit=e.split_shift&&!isVarinder(e);
  let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th><th>Remarks</th><th>Action</th></tr></thead><tbody>';
  rows.forEach(date=>{
    const d=getDraft(date,e.id),rowClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
-   h+='<tr class="'+rowClass+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(d.in_time)+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(d.in_time_2)+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(d.out_time_2)+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td><td><input data-f="note" value="'+esc(d.note)+'" placeholder="Remarks"></td><td><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></td></tr>'
+   h+='<tr class="'+rowClass+(date>localToday()?' futureDate':'')+'" data-date="'+date+'"><td>'+fmtDate(date)+'</td><td><input data-f="in_time" value="'+esc(time12(d.in_time))+'"></td>'+(isSplit?'<td><input data-f="in_time_2" value="'+esc(time12(d.in_time_2))+'"></td>':'')+'<td><input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></td><td><input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(time12(isVarinder(e)?d.final_out:d.out_time))+'"></td>'+(isSplit?'<td><input data-f="out_time_2" value="'+esc(time12(d.out_time_2))+'"></td>':'')+'<td><input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></td><td><input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></td><td><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></td><td><input data-f="note" value="'+esc(d.note)+'" placeholder="Remarks"></td><td><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></td></tr>'
  });
  h+='</tbody>';$('regTable').innerHTML=h;
  $('regCards').innerHTML=rows.map(date=>{
    const d=getDraft(date,e.id),cardClass=d.status==='Sunday'?'sundayRow':d.status==='Holiday'?'holidayRow':['Leave','Full Day Leave','First Half Leave','Second Half Leave','Half Day'].includes(d.status)?'leaveRow':d.status==='Absent'?'absentRow':d.status==='Present'?'presentRow':'';
-   return '<div class="regCard '+cardClass+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(d.in_time)+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(isVarinder(e)?d.final_out:d.out_time)+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label><label class="remarkField">Remarks<input data-f="note" value="'+esc(d.note)+'" placeholder="Remarks"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
+   return '<div class="regCard '+cardClass+(date>localToday()?' futureDate':'')+'" data-date="'+date+'"><div class="regCardHead"><b>'+fmtDate(date)+'</b><select data-f="status">'+['','Present','Absent','Leave','Half Day','First Half Leave','Second Half Leave','Full Day Leave','Holiday','Sunday'].map(x=>'<option '+(x===d.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div><div class="regFields"><label>IN<input data-f="in_time" value="'+esc(time12(d.in_time))+'"></label><label>OUT<input data-f="'+(isVarinder(e)?'final_out':'out_time')+'" value="'+esc(time12(isVarinder(e)?d.final_out:d.out_time))+'"></label><label>UT<input data-f="ut" value="'+esc(fmtMin(d.ut))+'"></label><label>SL<input data-f="sl" value="'+esc(fmtMin(d.sl))+'"></label><label>OT<input data-f="ot" value="'+esc(fmtMin(d.ot))+'"></label><label class="remarkField">Remarks<input data-f="note" value="'+esc(d.note)+'" placeholder="No entry yet"></label></div><button type="button" class="btn" data-delete="'+date+'">Delete entry</button></div>'
  }).join('');
  document.querySelectorAll('#regTable tr[data-date]').forEach(tr=>tr.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCell(tr,e,el))));
  document.querySelectorAll('#regCards .regCard').forEach(card=>card.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('change',()=>editCard(card,e,el))));
@@ -280,10 +284,40 @@ async function editCard(card,e,changed){
   updateRegSummary(e,datesForMonth());
   updateGrandTotal();
 }
+
+function renderAllStaffDayView(){
+ const active=employees.filter(e=>e.active),dates=datesForMonth(),today=localToday();
+ $('register').innerHTML=monthToolbar()+'<div class="card"><h2>All Staff Day View</h2><label>Date <input id="allStaffDate" type="date" value="'+(today.slice(0,7)===month?today:month+'-01')+'" max="'+today+'"></label><div id="allStaffRows" class="tablewrap"></div></div>';
+ $('month').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderAllStaffDayView()};
+ $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
+ $('dayViewBtn').onclick=renderAllStaffDayView;$('missingBtn').onclick=renderMissingFinder;
+ const render=()=>{const date=$('allStaffDate').value;let h='<table><thead><tr><th>Employee</th><th>Expected Shift</th><th>IN</th><th>OUT</th><th>Status</th><th>UT</th><th>SL</th><th>OT</th></tr></thead><tbody>';
+ active.forEach(e=>{const d=getDraft(date,e.id);let st=d.status||statusFor(e,date,d,d.attendance);if(!d.record&&!d.attendance)st='Missing';else if(st==='Present'&&d.in_time){const sched=mins(ruleFor(e).normal_start)||540;if(mins(d.in_time)>sched)st='Late'}h+='<tr><td>'+esc(e.name)+'</td><td>'+esc(shiftLabel(e))+'</td><td>'+esc(time12(d.in_time))+'</td><td>'+esc(time12(isVarinder(e)?d.final_out:d.out_time))+'</td><td>'+esc(st||'Missing')+'</td><td>'+fmtMin(d.ut)+'</td><td>'+fmtMin(d.sl)+'</td><td>'+fmtMin(d.ot)+'</td></tr>'});
+ h+='</tbody></table>';$('allStaffRows').innerHTML=h;};
+ $('allStaffDate').onchange=render;render();
+}
+function renderMissingFinder(){
+ const dates=datesForMonth().filter(d=>d<localToday()),active=employees.filter(e=>e.active);
+ $('register').innerHTML=monthToolbar()+'<div class="card"><h2>Missing / Incomplete Attendance</h2><p class="muted">Past dates only. Includes missing records, missing OUT, blank status, or timings without status.</p><div id="missingRows" class="tablewrap"></div></div>';
+ $('month').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderMissingFinder()};
+ $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
+ $('dayViewBtn').onclick=renderAllStaffDayView;$('missingBtn').onclick=renderMissingFinder;
+ let h='<table><thead><tr><th>Date</th><th>Employee</th><th>Issue</th><th>IN</th><th>OUT</th><th>Status</th></tr></thead><tbody>',n=0;
+ dates.forEach(date=>active.forEach(e=>{const k=rowKey(date,e.id),r=recordMap.get(k),a=attendanceMap.get(k),d=getDraft(date,e.id);let issue='';
+ if(!r&&!a)issue='No record';else if(r?.in_time&&!r?.out_time)issue='Missing OUT';else if((r?.in_time||r?.out_time)&&!a?.status&&!d.status)issue='Timings without status';else if((r||a)&&!a?.status&&!d.status)issue='Blank status';
+ if(issue){n++;h+='<tr><td>'+fmtDate(date)+'</td><td>'+esc(e.name)+'</td><td>'+issue+'</td><td>'+esc(time12(r?.in_time))+'</td><td>'+esc(time12(r?.out_time))+'</td><td>'+esc(a?.status||'')+'</td></tr>'}
+ }));
+ if(!n)h+='<tr><td colspan="6">No missing or incomplete records found.</td></tr>';h+='</tbody></table>';$('missingRows').innerHTML=h;
+}
+
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
- let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
- active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
+ let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th><th>OT</th><th>UT</th><th>SL</th><th>Net OT</th></tr></thead><tbody>';
+ active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});const totals=dates.reduce((t,d)=>{const x=getDraft(d,e.id);t.ot+=Number(x.ot)||0;t.ut+=Number(x.ut)||0;t.sl+=Number(x.sl)||0;return t},{ot:0,ut:0,sl:0});
+ const net=totals.ot+totals.ut-totals.sl;
+ h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td><td>'+fmtMin(totals.ot)+'</td><td>'+fmtMin(totals.ut)+'</td><td>'+fmtMin(totals.sl)+'</td><td>'+fmtMin(net)+'</td></tr>'});
+ const gt=active.reduce((t,e)=>dates.reduce((_,d)=>{const x=getDraft(d,e.id);t.ot+=Number(x.ot)||0;t.ut+=Number(x.ut)||0;t.sl+=Number(x.sl)||0;return t},t),{ot:0,ut:0,sl:0});
+ h+='<tr class="total"><td>Grand Total</td><td colspan="6"></td><td>'+fmtMin(gt.ot)+'</td><td>'+fmtMin(gt.ut)+'</td><td>'+fmtMin(gt.sl)+'</td><td>'+fmtMin(gt.ot+gt.ut-gt.sl)+'</td></tr>';
  h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderSummary()};$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
@@ -424,6 +458,14 @@ function renderRules(){
  </div>`;
  $('rulesSection').innerHTML=html;
 }
+
+function saveAllWithReview(){
+ const changed=[...dirtyDrafts].map(k=>drafts.get(k)).filter(Boolean);
+ if(!changed.length){saveAll();return}
+ const rows=changed.map(d=>{const e=emp(d.id),r=d.record||{},old={ut:Number(r.ut_override_minutes??r.ut_minutes)||0,sl:Number(r.sl_override_minutes??r.sl_minutes)||0,ot:Number(r.ot_override_minutes??r.ot_minutes)||0};return (e?.name||'Employee')+' · '+fmtDate(d.date)+'\nUT '+fmtMin(old.ut)+' → '+fmtMin(d.ut)+' | SL '+fmtMin(old.sl)+' → '+fmtMin(d.sl)+' | OT '+fmtMin(old.ot)+' → '+fmtMin(d.ot)}).join('\n\n');
+ if(confirm('Review changed attendance rows before saving:\n\n'+rows+'\n\nSave these changes?'))saveAll();
+}
+
 let savingAll=false;
 async function saveAll(){
  if(savingAll)return;

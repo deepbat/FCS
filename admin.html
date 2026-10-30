@@ -3,10 +3,10 @@
 <meta name="theme-color" content="#eef4f7"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <title>FCS Attendance - Admin</title><style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-*{box-sizing:border-box}body{margin:0;background:#eef4f7;color:#183047;font:14px Arial,Helvetica,sans-serif}.app{max-width:1280px;margin:auto;padding:10px}
+*{box-sizing:border-box}body{margin:0;background:#eef4f7;color:#183047;font:14px 'DM Sans',Arial,Helvetica,sans-serif}.app{max-width:1280px;margin:auto;padding:10px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}h1{font-size:22px;margin:0 0 3px}h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:0 0 10px}.muted{color:#64748b}
-.card{background:#fff;border:1px solid #d5e0e8;border-radius:8px;padding:10px;margin-bottom:8px;box-shadow:0 2px 7px rgba(23,50,77,.04)}
-button,a{font:inherit}.btn{border:1px solid #c7d5df;background:#e4eef2;color:#183047;padding:7px 10px;border-radius:6px;cursor:pointer}.primary{background:#245c73;color:#fff;border-color:#245c73}
+.card{background:#fff;border:1px solid #d5e0e8;border-radius:18px;padding:14px;margin-bottom:8px;box-shadow:0 8px 25px rgba(23,50,77,.06)}
+button,a{font:inherit}.btn{border:1px solid #c7d5df;background:#e0edf2;color:#24485c;padding:9px 12px;border-radius:10px;min-height:40px;cursor:pointer}.primary{background:linear-gradient(110deg,#7b5ce6,#4f8df9);color:#fff;border-color:transparent}
 .savebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.savebar .primary{padding:8px 13px}.saveState{color:#526879}.tabs,.modes{display:flex;gap:0;border-bottom:1px solid #c7d5df;margin-bottom:7px}.tabs button,.modes button{border-radius:6px 6px 0 0;border:1px solid #c7d5df;border-bottom:0;margin-right:3px}.active{background:#fff!important;font-weight:700}
 .toolbar{display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap;background:#f7fafc;border:1px solid #d5e0e8;padding:7px;margin-bottom:0}.toolbar input,.toolbar select{padding:7px;border:1px solid #c7d5df;border-radius:6px}
 .personTabs{display:flex;flex-direction:column;gap:3px;width:180px;padding:2px;flex:none}.personTab{white-space:nowrap;text-align:left;width:100%}.registerLayout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:8px}.registerMain{min-width:0}
@@ -18,7 +18,7 @@ td input,td select{width:100%;min-width:72px;border:1px solid transparent;backgr
 .regCards{display:none}.regCard{border:1px solid #d5e0e8;border-radius:8px;margin:4px 0;background:#fff;padding:7px}.regCardHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px}.regCardHead select{width:auto;min-width:130px;padding:5px}.regFields{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.regFields label{font-size:11px;font-weight:700;color:#526879}.regFields input{display:block;width:100%;min-width:0;margin-top:2px;border:1px solid #c7d5df;background:#fff;border-radius:5px;padding:4px;text-align:center}
 .regCard.sundayRow{background:#edf0f2}.regCard.holidayRow{background:#e8f3fa}.regCard.leaveRow{background:#fff7df}.regCard.absentRow{background:#fdeeee}.regCard.presentRow{background:#eef9f3}.hidden{display:none!important}.message{min-height:20px}.error{color:#b42318}.ok{color:#19704a}
 .login{max-width:430px;margin:70px auto}.loginBrand{display:flex;align-items:center;gap:12px;margin-bottom:14px}.loginBrand h1{margin:0 0 2px;font-size:22px}.loginBrand p{margin:0;color:#64748b}.brandMark{width:48px;height:48px;border-radius:9px;background:#245c73;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px}.loginLine{height:1px;background:#d5e0e8;margin:0 0 16px}.login input{width:100%;padding:11px;border:1px solid #c7d5df;border-radius:6px;margin-top:5px}.login button{width:100%;margin-top:12px}.readme{line-height:1.5}.readme li{margin:5px 0}.readme h2{margin-top:0}.readme h3{margin:16px 0 6px;color:#245c73}.readme ul{margin:6px 0 10px;padding-left:22px}.readme .ruleNote{background:#f7fafc;border:1px solid #d5e0e8;border-radius:7px;padding:9px 11px;margin:8px 0}
-@media(max-width:700px){.app{padding:7px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.toolbar{flex-wrap:wrap}.registerLayout{grid-template-columns:1fr}.personTabs{order:0;width:100%;max-height:150px;overflow:auto}.registerTableWrap{display:none}.regCards{display:block;max-height:calc(100vh - 250px);overflow:auto;padding-right:2px}.regFields{grid-template-columns:repeat(2,1fr)}}
+.shiftLabel{font-size:12px;font-weight:500;margin-top:3px}.regCard button,.personTab{min-height:42px}.toolbar input,.toolbar select{min-height:40px}.futureDate{color:#94a3b8;background:#f8fafc!important}.futureDate td{background:#f8fafc!important;color:#94a3b8!important}@media(max-width:700px){.app{padding:7px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.toolbar{flex-wrap:wrap}.registerLayout{grid-template-columns:1fr}.personTabs{order:0;width:100%;max-height:150px;overflow:auto}.registerTableWrap{display:none}.regCards{display:block;max-height:calc(100vh - 250px);overflow:auto;padding-right:2px}.regFields{grid-template-columns:repeat(2,1fr)}}
 @media print{
  @page{size:A4 portrait;margin:8mm}
  html,body{background:#fff!important;color:#111!important;width:100%;margin:0;padding:0}
@@ -39,5 +39,5 @@ td input,td select{width:100%;min-width:72px;border:1px solid transparent;backgr
 </style></head>
 <body><main id="root"></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./admin.js?v=20261014-3"></script>
+<script src="./admin.js?v=20261030-1"></script>
 </body></html>
