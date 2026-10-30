@@ -58,11 +58,26 @@ async function calculate(e,d,date){
   }
   return c;
 }
+function pembaDutyMinutes(rec){
+  const span=(a,b)=>{
+    if(!a||!b)return 0;
+    let duration=mins(b)-mins(a);
+    if(duration<0)duration+=1440;
+    return duration;
+  };
+  return rec?.in_time_2&&rec?.out_time_2
+    ? span(rec.in_time,rec.out_time)+span(rec.in_time_2,rec.out_time_2)
+    : span(rec?.in_time,rec?.out_time);
+}
 function statusFor(e,date,rec,existing){
-  if(existing)return existing.status;
+  const pembaOverEight=e.name==='Pemba Tamang'&&pembaDutyMinutes(rec)>480;
+  // Keep manually selected statuses, but replace a stale Half Day for Pemba
+  // when his recorded duty exceeds eight hours.
+  if(existing&&!(pembaOverEight&&existing.status==='Half Day'))return existing.status;
   if(isSunday(date))return 'Sunday';
   if(hol(date))return 'Holiday';
   if(!rec?.in_time||!rec?.out_time)return '';
+  if(pembaOverEight)return 'Present';
   const inMin=mins(rec.in_time);
   // Short leave is allowed for a maximum of two hours. More than two hours
   // late means half day. For a normal 9:00am start, half-day begins at 1:00pm.
