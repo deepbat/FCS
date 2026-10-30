@@ -25,7 +25,7 @@ Mobile-first attendance and overtime PWA for FCS.
 | 007 | Varinder Pal | Gateman | Split shift; 480m duty; 30m rounding; no break |
 | 008 | Barkha | Gateman | 495m elapsed full day = 480m duty + 15m break |
 | 009 | Rajan | Gateman | 8:00am normal reference; night-duty/source OT is manual where required |
-| 010 | Pemba Tamang | Gateman | 8:00pm–4:00am normal night duty (8h, no break); 4:00am–9:00am scheduled OT window when applicable |
+| 010 | Pemba Tamang | Gateman | 8:00pm night duty when applicable; source/night OT rules below |
 | 011 | Ajay Kumar | Driver | 8:20am–5:00pm, 520m duty, 40m break; OT eligible |
 | 012 | Satpal Singh | Driver | 9:00am–5:45pm, 45m break; OT eligible |
 
@@ -84,7 +84,7 @@ Employee-specific settings override category defaults. Category rules are mainta
 ### Rajan / Pemba Tamang night duty
 - Overnight physical-register values may be source/manual values.
 - Evening IN (18:00 or later) is not treated as morning late arrival.
-- Pemba's normal night shift is 8:00pm–4:00am (8 hours, no break). The scheduled OT window is 4:00am–9:00am when applicable. More than 8 hours of elapsed duty marks the attendance Present; early arrival before 8:00pm does not create extra OT and time after 9:00am is not automatic OT.
+- Pemba Sunday night-duty handling follows the configured 8:00pm–9:00am rule; early arrival before 8:00pm does not create extra OT and time after 9:00am is not automatic OT.
 - Where the physical register is authoritative, use explicit OT override rather than inventing OT from an overnight clock difference.
 - An OUT earlier than IN is allowed for overnight duty and is calculated across midnight.
 
