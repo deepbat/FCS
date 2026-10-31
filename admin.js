@@ -197,8 +197,11 @@ async function editCell(tr,e,changed){
     const f=el.dataset.f,v=el.value;
     if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;el.value=d[f]||''}
     else if(['ut','sl','ot'].includes(f)){
-      if(timeChanged)return;
-      const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
+      // Only process the adjustment field that was actually edited. This keeps
+      // manually entered SL/UT/OT exact and avoids re-parsing sibling fields.
+      if(timeChanged||f!==changedField)return;
+      const n=parseAdj(v);
+      if(n!=null){d[f]=n;d[f+'_override']=n;el.value=fmtMin(n)}
     } else d[f]=v;
   });
   if(timeChanged){
@@ -264,14 +267,18 @@ async function editCard(card,e,changed){
   const before={ut:d.ut,sl:d.sl,ot:d.ot};
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
   dirtyDrafts.add(key);
+  const changedField=changed?.dataset?.f||'';
   const timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'];
-  const timeChanged=timeFields.includes(changed?.dataset?.f);
+  const timeChanged=timeFields.includes(changedField);
   card.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
     if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;}
     else if(['ut','sl','ot'].includes(f)){
-      if(timeChanged)return;
-      const n=parseAdj(v);if(n!=null){d[f]=n;d[f+'_override']=n}
+      // Only process the adjustment field that was actually edited. This keeps
+      // manually entered SL/UT/OT exact and avoids re-parsing sibling fields.
+      if(timeChanged||f!==changedField)return;
+      const n=parseAdj(v);
+      if(n!=null){d[f]=n;d[f+'_override']=n;el.value=fmtMin(n)}
     } else d[f]=v;
   });
   if(timeChanged){
