@@ -193,6 +193,24 @@ async function editCell(tr,e,changed){
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
   dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
+  // Handle a manual UT/SL/OT edit in isolation. Do not scan sibling inputs or
+  // allow any other field to overwrite the value being committed on blur.
+  if(['ut','sl','ot'].includes(changedField)&&!timeChanged){
+    const n=parseAdj(changed.value);
+    if(n==null){
+      if(String(changed.value||'').trim()){
+        changed.value=fmtMin(d[changedField]);
+        return;
+      }
+    }else{
+      d[changedField]=n;
+      d[changedField+'_override']=n;
+      changed.value=fmtMin(n);
+    }
+    adjustGrandTotals(before,d);
+    markUnsaved();updateRegSummary(e,datesForMonth());updateGrandTotal();
+    return;
+  }
   tr.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
     if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;el.value=d[f]||''}
