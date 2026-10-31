@@ -9,7 +9,7 @@ let employees=[],rules=[],holidays=[],records=[],attendance=[];
 let employeeMap=new Map(),ruleMap=new Map(),holidayMap=new Map(),recordMap=new Map(),attendanceMap=new Map();
 let grandTotals={ot:0,ut:0,sl:0}, editSeq=new Map();
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
-let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), hasUnsaved=false;
+let drafts=new Map(), dirtyDrafts=new Set(), dirtyEmployees=new Set(), dirtyRules=new Set(), activeEmployee=0, currentTab='attendance', currentMode='register', month=localToday().slice(0,7), reportStart=month+'-01', reportEnd=month+'-'+String(new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate()).padStart(2,'0'), hasUnsaved=false;
 
 const fmtDate=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:s};
 const fmtMin=n=>{n=Math.max(0,Math.round(Number(n)||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')};
@@ -126,12 +126,12 @@ function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textConten
 function confirmDiscard(){return !hasUnsaved||confirm('Discard unsaved changes?')}
 window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
 async function loadData(){
-  const [start,end]=range(month);
+  const start=reportStart,end=reportEnd;
   const [er,rr,hr,dr,ar]=await Promise.all([
     db.from('employees').select('*').order('employee_code'),
     db.from('category_rules').select('*').order('category'),
     db.from('holidays').select('*').order('holiday_date'),
-    db.from('daily_records').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id'),
+    db.from('daily_records').select('*').gte('work_date',start).lte('work_date',end).order('work_date,employee_id'),
     db.from('attendance').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id')
   ]);
   if(er.error||rr.error||hr.error||dr.error||ar.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error].filter(Boolean).map(x=>x.message).join('; '));
@@ -158,16 +158,22 @@ $('summaryMode').onclick=()=>{currentMode='summary';$('summaryMode').classList.a
 renderRegister();
 }
 function monthToolbar(){
-return '<div class="toolbar noPrint"><label style="margin:0">Month <input id="month" type="month" value="'+month+'"></label><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
+return '<div class="toolbar noPrint"><label style="margin:0">From <input id="reportStart" type="date" value="'+reportStart+'"></label><label style="margin:0">To <input id="reportEnd" type="date" value="'+reportEnd+'"></label><button id="applyRange" class="btn">Generate Report</button><button id="print" class="btn">Print</button><button id="excel" class="btn">Excel - All People</button></div>'
 }
 function datesForMonth(){
- const [start,end]=range(month);
- const out=[];let d=new Date(start+'T12:00:00'),z=new Date(end+'T12:00:00');while(d<z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
+ const out=[];if(!reportStart||!reportEnd||reportStart>reportEnd)return out;
+ let d=new Date(reportStart+'T12:00:00'),z=new Date(reportEnd+'T12:00:00');while(d<=z){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}return out;
+}
+async function applyReportRange(){
+ const start=$('reportStart').value,end=$('reportEnd').value;
+ if(!start||!end||start>end){alert('Please select a valid From and To date.');return}
+ if(!confirmDiscard()){ $('reportStart').value=reportStart;$('reportEnd').value=reportEnd;return }
+ reportStart=start;reportEnd=end;month=start.slice(0,7);activeEmployee=0;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();if(currentMode==='summary')renderSummary();else renderRegister();
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
  $('register').innerHTML=monthToolbar()+'<div class="registerLayout"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div></div></div>';
- $('month').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;activeEmployee=0;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderRegister()};
+ $('applyRange').onclick=applyReportRange;
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
  $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
@@ -322,9 +328,9 @@ async function editCard(card,e,changed){
 }
 function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
- let h='<div class="toolbar noPrint"><label style="margin:0">Month <input id="summaryMonth" type="month" value="'+month+'"></label><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
+ let h='<div class="toolbar noPrint"><label style="margin:0">From <input id="reportStart" type="date" value="'+reportStart+'"></label><label style="margin:0">To <input id="reportEnd" type="date" value="'+reportEnd+'"></label><button id="applyRange" class="btn">Generate Report</button><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
  active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
- h+='</tbody></table></div>';$('summary').innerHTML=h;$('summaryMonth').onchange=async ev=>{if(!confirmDiscard()){ev.target.value=month;return}month=ev.target.value;dirtyDrafts.clear();dirtyEmployees.clear();dirtyRules.clear();hasUnsaved=false;await loadData();renderSummary()};$('summaryPrint').onclick=()=>window.print();
+ h+='</tbody></table></div>';$('summary').innerHTML=h;$('applyRange').onclick=applyReportRange;$('summaryPrint').onclick=()=>window.print();
 }
 function renderEmployees(){
  $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Start</th><th>Normal End</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-start="'+e.id+'" value="'+(e.normal_start_minutes==null?'':String(Math.floor(e.normal_start_minutes/60)).padStart(2,'0')+':'+String(e.normal_start_minutes%60).padStart(2,'0'))+'"></td><td><input data-end="'+e.id+'" value="'+(e.normal_end_minutes==null?'':String(Math.floor(e.normal_end_minutes/60)).padStart(2,'0')+':'+String(e.normal_end_minutes%60).padStart(2,'0'))+'"></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
