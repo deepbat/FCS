@@ -121,7 +121,7 @@ function getDraft(date,id){
   if(d.ot_override!=null)d.ot=Number(d.ot_override)||0;
   drafts.set(key,d);return d;
 }
-function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;let m=v.match(/^(\d+):([0-5]\d)$/);if(m)return +m[1]*60+(+m[2]);m=v.match(/^(\d+)h\s*(\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\d+$/.test(v))return +v;return null}
+function parseAdj(v){v=String(v||'').trim().toLowerCase();if(!v)return null;let m=v.match(/^(\\d+):([0-5]\\d)$/);if(m)return +m[1]*60+(+m[2]);m=v.match(/^(\\d+)h\\s*(\\d{1,2})m$/);if(m)return +m[1]*60+(+m[2]||0);if(/^\\d{4}$/.test(v)){const h=+v.slice(0,2),n=+v.slice(2);return n<=59?h*60+n:null}if(/^\\d+$/.test(v))return +v;return null}
 function markUnsaved(){hasUnsaved=true;const s=$('saveState');if(s){s.textContent='Unsaved changes';s.className='saveState error'}}
 function confirmDiscard(){return !hasUnsaved||confirm('Discard unsaved changes?')}
 window.addEventListener('beforeunload',e=>{if(hasUnsaved){e.preventDefault();e.returnValue='';}});
