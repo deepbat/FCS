@@ -3,13 +3,13 @@
 <body><main class="app">
 <header class="topbar"><div><h1>FCS Attendance</h1><p>Daily register entry</p></div><a class="ghost" href="./admin.html">Admin</a></header>
 <section class="card gate-card">
-<div class="syncbar"><span id="syncStatus">Ready</span></div>
+<div class="syncbar"><span id="syncStatus">Ready</span><button id="retrySync" type="button" class="dateBtn">Retry sync</button></div><pre id="pendingList" class="smallnote hidden" aria-live="polite"></pre>
 <label>Date</label><div class="dateRow"><input id="workDateDisplay" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" autocomplete="off" aria-label="Date in dd/mm/yyyy"><button id="datePickerBtn" type="button" class="dateBtn" aria-label="Choose date">Calendar</button><input id="workDate" type="date" class="datePickerHidden" tabindex="-1" aria-hidden="true"></div>
 <label>Employee</label><select id="employee"></select>
-<div class="timegrid"><div><label>IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="7" placeholder="9:00" autocomplete="off"></div><div><label>OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="7" placeholder="5:45" autocomplete="off"></div></div><div id="secondShift" class="timegrid hidden"><div><label>IN 2</label><input id="inTime2" type="text" inputmode="numeric" maxlength="7" placeholder="6:00" autocomplete="off"></div><div><label>OUT 2</label><input id="outTime2" type="text" inputmode="numeric" maxlength="7" placeholder="8:00" autocomplete="off"></div></div>
+<div class="timegrid"><div><label>IN</label><input id="inTime" type="text" inputmode="numeric" maxlength="7" placeholder="09:00" autocomplete="off"></div><div><label>OUT</label><input id="outTime" type="text" inputmode="numeric" maxlength="7" placeholder="17:45" autocomplete="off"></div></div><div id="secondShift" class="timegrid hidden"><div><label>IN 2</label><input id="inTime2" type="text" inputmode="numeric" maxlength="7" placeholder="6:00" autocomplete="off"></div><div><label>OUT 2</label><input id="outTime2" type="text" inputmode="numeric" maxlength="7" placeholder="8:00" autocomplete="off"></div></div>
 <button id="saveBtn" class="primary">Save</button><p id="message" class="message"></p>
 </section>
-<p class="smallnote">Enter timings from the physical register. Previous entries are not displayed here.</p>
+<p class="smallnote">Enter timings in 24-hour format, for example IN 09:00 and OUT 17:45. Previous entries are not displayed here.</p>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20261016-2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js?v=20261106-1"></script><script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));</script>
 </body></html>

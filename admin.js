@@ -132,7 +132,7 @@ async function loadData(){
     db.from('category_rules').select('*').order('category'),
     db.from('holidays').select('*').order('holiday_date'),
     db.from('daily_records').select('*').gte('work_date',start).lte('work_date',end).order('work_date,employee_id'),
-    db.from('attendance').select('*').gte('work_date',start).lt('work_date',end).order('work_date,employee_id')
+    db.from('attendance').select('*').gte('work_date',start).lte('work_date',end).order('work_date,employee_id')
   ]);
   if(er.error||rr.error||hr.error||dr.error||ar.error)throw new Error([er.error,rr.error,hr.error,dr.error,ar.error].filter(Boolean).map(x=>x.message).join('; '));
   employees=er.data||[];rules=rr.data||[];holidays=hr.data||[];records=dr.data||[];attendance=ar.data||[];
@@ -172,10 +172,10 @@ async function applyReportRange(){
 }
 function renderRegister(){
  const active=employees.filter(e=>e.active);if(activeEmployee>=active.length)activeEmployee=0;const e=active[activeEmployee];
- $('register').innerHTML=monthToolbar()+'<div class="registerLayout"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+month+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div></div></div>';
+ $('register').innerHTML=monthToolbar()+'<div class="registerLayout"><aside class="personTabs">'+employees.filter(x=>x.active).map((x,i)=>'<button class="btn personTab '+(i===activeEmployee?'active':'')+'" data-person="'+i+'">'+esc(x.name)+'</button>').join('')+'</aside><div class="registerMain"><div id="printTitle" class="summary">'+esc(e?.name||'')+' - Attendance Register - '+fmtDate(reportStart)+' to '+fmtDate(reportEnd)+'</div><div id="regSummary" class="summary"></div><div class="tablewrap registerTableWrap"><table id="regTable"></table></div><div id="regCards" class="regCards"></div></div></div>';
  $('applyRange').onclick=applyReportRange;
  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{activeEmployee=+b.dataset.person;renderRegister()});
- $('print').onclick=()=>window.print();$('excel').onclick=exportEmployee;
+ $('print').onclick=()=>{if(hasUnsaved){alert('Please save changes before printing.');return}window.print()};$('excel').onclick=exportEmployee;
  if(!e){$('regTable').innerHTML='<tbody><tr><td>No active employees.</td></tr></tbody>';return}
  const rows=datesForMonth(),isSplit=e.split_shift&&!isVarinder(e);
  let h='<thead><tr><th>Date</th><th>IN</th>'+(isSplit?'<th>IN 2</th>':'')+'<th>UT</th><th>OUT</th>'+(isSplit?'<th>OUT 2</th>':'')+'<th>SL</th><th>OT</th><th>Attendance</th><th>Remarks</th><th>Action</th></tr></thead><tbody>';
@@ -197,8 +197,9 @@ async function editCell(tr,e,changed){
   const date=tr.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
   const before={ut:d.ut,sl:d.sl,ot:d.ot};
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
-  dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'',timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'],timeChanged=timeFields.includes(changedField);
+  if(timeChanged&&[d.ut_override,d.sl_override,d.ot_override].some(v=>v!=null)){if(!confirm('Changing a time will clear this row’s manual OT, UT and SL overrides. Continue?')){changed.value=d[changedField]||'';return}}
+  dirtyDrafts.add(key);
   // Handle a manual UT/SL/OT edit in isolation. Do not scan sibling inputs or
   // allow any other field to overwrite the value being committed on blur.
   if(['ut','sl','ot'].includes(changedField)&&!timeChanged){
@@ -290,10 +291,11 @@ async function editCard(card,e,changed){
   const date=card.dataset.date,d=getDraft(date,e.id),key=rowKey(date,e.id);
   const before={ut:d.ut,sl:d.sl,ot:d.ot};
   const seq=(editSeq.get(key)||0)+1;editSeq.set(key,seq);
-  dirtyDrafts.add(key);
   const changedField=changed?.dataset?.f||'';
   const timeFields=['in_time','out_time','in_time_2','out_time_2','final_out'];
   const timeChanged=timeFields.includes(changedField);
+  if(timeChanged&&[d.ut_override,d.sl_override,d.ot_override].some(v=>v!=null)){if(!confirm('Changing a time will clear this row’s manual OT, UT and SL overrides. Continue?')){changed.value=d[changedField]||'';return}}
+  dirtyDrafts.add(key);
   card.querySelectorAll('[data-f]').forEach(el=>{
     const f=el.dataset.f,v=el.value;
     if(timeFields.includes(f)){const parsed=normalize(v);if(v.trim()&&!parsed){d.invalidTime=f;markUnsaved();$('saveState').textContent='Invalid time: '+v;return}if(d.invalidTime===f)d.invalidTime=null;d[f]=parsed;}
@@ -330,11 +332,11 @@ function renderSummary(){
  const active=employees.filter(e=>e.active),dates=datesForMonth();
  let h='<div class="toolbar noPrint"><label style="margin:0">From <input id="reportStart" type="date" value="'+reportStart+'"></label><label style="margin:0">To <input id="reportEnd" type="date" value="'+reportEnd+'"></label><button id="applyRange" class="btn">Generate Report</button><button id="summaryPrint" class="btn">Print</button></div><div class="tablewrap"><table><thead><tr><th>Employee</th><th>Present Days</th><th>Half Day</th><th>Leave</th><th>Absent</th><th>Sunday</th><th>Holiday</th></tr></thead><tbody>';
  active.forEach(e=>{const counts={Present:0,'Half Day':0,Leave:0,Absent:0,Sunday:0,Holiday:0};dates.forEach(d=>{const x=getDraft(d,e.id),r=x.record,s=x.status||statusFor(e,d,r,x.attendance);if(s==='First Half Leave'||s==='Second Half Leave'||s==='Half Day'){counts['Half Day']++;counts.Present+=0.5}else if(s==='Full Day Leave'||s==='Leave')counts.Leave++;else if(counts[s]!=null){counts[s]++;if(s==='Present')counts.Present+=0}});h+='<tr><td>'+esc(e.name)+'</td><td>'+counts.Present+'</td><td>'+counts['Half Day']+'</td><td>'+counts.Leave+'</td><td>'+counts.Absent+'</td><td>'+counts.Sunday+'</td><td>'+counts.Holiday+'</td></tr>'});
- h+='</tbody></table></div>';$('summary').innerHTML=h;$('applyRange').onclick=applyReportRange;$('summaryPrint').onclick=()=>window.print();
+ h+='</tbody></table></div>';$('summary').innerHTML=h;$('applyRange').onclick=applyReportRange;$('summaryPrint').onclick=()=>{if(hasUnsaved){alert('Please save changes before printing.');return}window.print()};
 }
 function renderEmployees(){
  $('employeesSection').innerHTML='<div class="card"><h3>Add Employee</h3><div class="grid"><input id="newCode" placeholder="Employee code"><input id="newName" placeholder="Employee name"><select id="newCat"><option>Staff</option><option>Driver</option><option>Gardener</option><option>Gateman</option></select><button id="addEmp" class="btn primary">Add</button></div><p id="empMsg" class="message"></p></div><div class="tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Active</th><th>Normal Start</th><th>Normal End</th><th>Normal Minutes</th><th>Break</th></tr></thead><tbody>'+employees.map(e=>'<tr><td>'+esc(e.employee_code)+'</td><td>'+esc(e.name)+'</td><td>'+esc(e.category)+'</td><td><input type="checkbox" data-active="'+e.id+'" '+(e.active?'checked':'')+'></td><td><input data-start="'+e.id+'" value="'+(e.normal_start_minutes==null?'':String(Math.floor(e.normal_start_minutes/60)).padStart(2,'0')+':'+String(e.normal_start_minutes%60).padStart(2,'0'))+'"></td><td><input data-end="'+e.id+'" value="'+(e.normal_end_minutes==null?'':String(Math.floor(e.normal_end_minutes/60)).padStart(2,'0')+':'+String(e.normal_end_minutes%60).padStart(2,'0'))+'"></td><td><input data-normal="'+e.id+'" value="'+(e.normal_work_minutes||0)+'"></td><td><input data-break="'+e.id+'" value="'+(e.break_minutes||0)+'"></td></tr>').join('')+'</tbody></table></div>';
- $('addEmp').onclick=async()=>{const code=$('newCode').value.trim(),name=$('newName').value.trim(),category=$('newCat').value;if(!code||!name)return;$('addEmp').disabled=true;const r=ruleFor({category});const {error}=await db.from('employees').insert({employee_code:code,name,category,normal_work_minutes:r.normal_work_minutes||525,break_minutes:r.break_minutes||0,active:true});if(error){$('empMsg').textContent=error.message;$('empMsg').className='message error'}else{await loadData();renderEmployees();renderRegister()}};
+ $('addEmp').onclick=async()=>{const code=$('newCode').value.trim(),name=$('newName').value.trim(),category=$('newCat').value;if(!code||!name)return;if(!confirmDiscard())return;$('addEmp').disabled=true;const r=ruleFor({category});const {error}=await db.from('employees').insert({employee_code:code,name,category,normal_work_minutes:r.normal_work_minutes||525,break_minutes:r.break_minutes||0,active:true});if(error){$('empMsg').textContent=error.message;$('empMsg').className='message error'}else{await loadData();renderEmployees();renderRegister()}};
  document.querySelectorAll('[data-active]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.active);e.active=x.checked;dirtyEmployees.add(e.id);markUnsaved()});
  document.querySelectorAll('[data-start]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.start),v=normalize(x.value);if(x.value.trim()&&!v){x.value=e.normal_start_minutes==null?'':String(Math.floor(e.normal_start_minutes/60)).padStart(2,'0')+':'+String(e.normal_start_minutes%60).padStart(2,'0');return}e.normal_start_minutes=v?mins(v):null;dirtyEmployees.add(e.id);markUnsaved()});
  document.querySelectorAll('[data-end]').forEach(x=>x.onchange=()=>{const e=emp(x.dataset.end),v=normalize(x.value);if(x.value.trim()&&!v){x.value=e.normal_end_minutes==null?'':String(Math.floor(e.normal_end_minutes/60)).padStart(2,'0')+':'+String(e.normal_end_minutes%60).padStart(2,'0');return}e.normal_end_minutes=v?mins(v):null;dirtyEmployees.add(e.id);markUnsaved()});
@@ -343,8 +345,8 @@ function renderEmployees(){
 }
 function renderHolidays(){
  $('holidaysSection').innerHTML='<div class="card"><h3>Add Holiday</h3><div class="grid"><input id="hd" type="date"><input id="hn" placeholder="Holiday name"><span></span><button id="addHol" class="btn primary">Add</button></div></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Name</th><th>Action</th></tr></thead><tbody>'+holidays.map(h=>'<tr><td>'+fmtDate(h.holiday_date)+'</td><td>'+esc(h.name)+'</td><td><button class="btn" data-delhol="'+h.id+'">Delete</button></td></tr>').join('')+'</tbody></table></div>';
- $('addHol').onclick=async()=>{if(!$('hd').value||!$('hn').value.trim())return;const {error}=await db.from('holidays').insert({holiday_date:$('hd').value,name:$('hn').value.trim()});if(!error){await loadData();renderHolidays()}};
- document.querySelectorAll('[data-delhol]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this holiday?'))return;await db.from('holidays').delete().eq('id',b.dataset.delhol);await loadData();renderHolidays()});
+ $('addHol').onclick=async()=>{if(!$('hd').value||!$('hn').value.trim())return;if(!confirmDiscard())return;const {error}=await db.from('holidays').insert({holiday_date:$('hd').value,name:$('hn').value.trim()});if(!error){await loadData();renderHolidays()}};
+ document.querySelectorAll('[data-delhol]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this holiday?')||!confirmDiscard())return;await db.from('holidays').delete().eq('id',b.dataset.delhol);await loadData();renderHolidays()});
 }
 function renderSettings(){
  $('settingsSection').innerHTML='<div class="card"><h3>Category Rules</h3><div class="tablewrap"><table><thead><tr><th>Category</th><th>Start</th><th>End</th><th>Normal Minutes</th><th>Break</th><th>OT</th><th>Threshold</th></tr></thead><tbody>'+rules.map(r=>'<tr><td>'+esc(r.category)+'</td><td><input data-r="start" data-cat="'+esc(r.category)+'" value="'+time(r.normal_start)+'"></td><td><input data-r="end" data-cat="'+esc(r.category)+'" value="'+time(r.normal_end)+'"></td><td><input data-r="normal" data-cat="'+esc(r.category)+'" value="'+(r.normal_work_minutes||0)+'"></td><td><input data-r="break" data-cat="'+esc(r.category)+'" value="'+(r.break_minutes||0)+'"></td><td><input type="checkbox" data-r="ot" data-cat="'+esc(r.category)+'" '+(r.ot_eligible?'checked':'')+'></td><td><input data-r="threshold" data-cat="'+esc(r.category)+'" value="'+(r.ot_threshold_minutes||15)+'"></td></tr>').join('')+'</tbody></table></div></div>';
@@ -586,7 +588,7 @@ function exportEmployee(){
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
  });
- XLSX.writeFile(wb,'FCS_Attendance_'+month+'.xlsx');
+ XLSX.writeFile(wb,'FCS_Attendance_'+reportStart+'_to_'+reportEnd+'.xlsx');
 }
 (async()=>{
  const {data:{session}}=await db.auth.getSession();

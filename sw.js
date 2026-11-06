@@ -1,0 +1,6 @@
+const CACHE_NAME='fcs-attendance-shell-v1';
+const SHELL=['./','./index.html','./admin.html','./app.js','./admin.js','./styles.css','./manifest.webmanifest','./icon.svg'];
+const SUPABASE_SCRIPT='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);await cache.addAll(SHELL);try{const response=await fetch(SUPABASE_SCRIPT,{mode:'no-cors'});await cache.put(SUPABASE_SCRIPT,response)}catch{}await self.skipWaiting()})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('fcs-attendance-')&&key!==CACHE_NAME)await caches.delete(key);await self.clients.claim()})()));
+self.addEventListener('fetch',event=>{const request=event.request;if(request.method!=='GET')return;const url=new URL(request.url),isSupabaseScript=request.url===SUPABASE_SCRIPT;if(url.origin===self.location.origin||isSupabaseScript)event.respondWith((async()=>{const cache=await caches.open(CACHE_NAME),cached=await cache.match(request);if(cached)return cached;const response=await fetch(request);if(response.ok||response.type==='opaque')cache.put(request,response.clone());return response})())});
