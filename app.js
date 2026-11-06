@@ -19,7 +19,7 @@ const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').c
 const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
 const displayToIso=v=>{const m=String(v||'').trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
 const setDateDisplay=()=>{const iso=$('workDate').value;$('workDateDisplay').value=isoToDisplay(iso)};
-const setSync=()=>{const q=queue(),n=q.length;$('syncStatus').textContent=n?n+' pending sync':'Ready';const list=$('pendingList');if(list){list.textContent=q.map(x=>{const p=x.entry||x.record||{},e=employees.find(v=>v.id===p.employee_id);return (e?.name||'Employee '+String(p.employee_id||'').slice(0,8))+' - '+(p.work_date||'date unavailable')+(x.lastError?' - Failed: '+x.lastError:' - Waiting to sync')}).join('\\n');list.classList.toggle('hidden',!n)}};
+const setSync=()=>{const q=queue(),n=q.length;$('syncStatus').textContent=n?n+' pending sync':'Ready';const list=$('pendingList');if(list){list.textContent=q.map(x=>{const p=x.entry||x.record||{},e=employees.find(v=>v.id===p.employee_id);return (e?.name||'Employee '+String(p.employee_id||'').slice(0,8))+' - '+(p.work_date||'date unavailable')+(x.lastError?' - Failed: '+x.lastError:' - Waiting to sync')}).join('\n');list.classList.toggle('hidden',!n)}};
 function selected(){return employees.find(e=>e.id===$('employee').value)}
 function isVarinder(e){return e?.name==='Varinder Pal'&&e?.split_shift}
 function renderEmployees(){
