@@ -19,7 +19,7 @@ const setMessage=(s,error=false)=>{$('message').textContent=s||'';$('message').c
 const isoToDisplay=iso=>{const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:''};
 const displayToIso=v=>{const m=String(v||'').trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);if(!m)return '';const d=+m[1],mo=+m[2],y=+m[3],dt=new Date(y,mo-1,d);return dt.getFullYear()===y&&dt.getMonth()===mo-1&&dt.getDate()===d?y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0'):''};
 const setDateDisplay=()=>{const iso=$('workDate').value;$('workDateDisplay').value=isoToDisplay(iso)};
-const setSync=()=>{const n=queue().length;$('syncStatus').textContent=n?n+' pending sync':'Ready'};
+const setSync=()=>{const q=queue(),n=q.length;$('syncStatus').textContent=n?n+' pending sync':'Ready';const list=$('pendingList');if(list){list.textContent=q.map(x=>{const p=x.entry||x.record||{},e=employees.find(v=>v.id===p.employee_id);return (e?.name||'Employee '+String(p.employee_id||'').slice(0,8))+' - '+(p.work_date||'date unavailable')+(x.lastError?' - Failed: '+x.lastError:' - Waiting to sync')}).join('\n');list.classList.toggle('hidden',!n)}};
 function selected(){return employees.find(e=>e.id===$('employee').value)}
 function isVarinder(e){return e?.name==='Varinder Pal'&&e?.split_shift}
 function renderEmployees(){
@@ -55,11 +55,6 @@ async function getHoliday(date){
  const {data,error}=await db.from('holidays').select('id').eq('holiday_date',date).maybeSingle();
  if(error)throw error;
  return !!data;
-}
-async function serverEntryExists(date,employeeId){
- const {data,error}=await db.from('daily_records').select('id').eq('work_date',date).eq('employee_id',employeeId).limit(1);
- if(error)throw error;
- return Array.isArray(data)&&data.length>0;
 }
 async function calculate(e,date,it,firstOut,secondIn=null,secondOut=null){
  const {data,error}=await db.rpc('calculate_attendance',{p_employee_id:e.id,p_work_date:date,p_in_time:it,p_out_time:firstOut,p_in_time_2:secondIn,p_out_time_2:secondOut});
@@ -100,11 +95,19 @@ async function syncPending(){
    const current=queue().find(x=>x.entry?.client_id===item.entry?.client_id || (x.record?.client_id&&x.record.client_id===item.record?.client_id));
    if(!current)continue;
    try{
+    const pendingEntry=item.entry||item.record;
+    const {data:existing,error:checkError}=await db.from('daily_records').select('id').eq('work_date',pendingEntry.work_date).eq('employee_id',pendingEntry.employee_id).limit(1);
+    if(checkError)throw checkError;
+    if(Array.isArray(existing)&&existing.length){
+      saveQueue(queue().filter(x=>x!==current));
+      setMessage('Attendance already exists for this employee/date. Gate entry was not duplicated. Use Admin for corrections.',true);
+      continue;
+    }
     const result=await syncOne(item.entry?await prepare(item.entry):item);
     saveQueue(queue().filter(x=>x!==current && (x.entry?.client_id||x.record?.client_id)!==(current.entry?.client_id||current.record?.client_id)));
     if(result?.superseded)console.info('Pending gate entry was superseded by an Admin correction.');
    }catch(err){
-    failed++;const msg=String(err?.message||err||'Unknown sync error');if(!firstError)firstError=msg;console.warn('Pending entry was retained:',err);
+    failed++;const msg=String(err?.message||err||'Unknown sync error');if(!firstError)firstError=msg;const q=queue(),idx=q.findIndex(x=>x.entry?.client_id===current.entry?.client_id||(x.record?.client_id&&x.record.client_id===current.record?.client_id));if(idx>=0){q[idx].lastError=msg;saveQueue(q)}console.warn('Pending entry was retained:',err);
    }
   }
  }finally{
@@ -125,11 +128,6 @@ async function save(){
   const key=date+'|'+e.id;
   if(queue().some(x=>entryKey(x.entry||x.record)===key)){
     setMessage('This employee/date is already pending sync. The gate entry cannot be entered again.',true);return;
-  }
-  if(!isVarinder(e)&&e.name!=='Bam Bahadur'){
-    if(await serverEntryExists(date,e.id)){
-      setMessage('Attendance already exists for this employee/date. Gate cannot change it. Use Admin for any correction.',true);return;
-    }
   }
   const entry={client_id:crypto.randomUUID(),work_date:date,employee_id:e.id,in_time:it,out_time:out,in_time_2:it2,out_time_2:out2};
   if(!enqueue(entry)){
@@ -152,6 +150,7 @@ $('inTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value
 $('outTime').onblur=e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value};
 $('inTime2')?.addEventListener('blur',e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value});
 $('outTime2')?.addEventListener('blur',e=>{if(e.target.value)e.target.value=normalize(e.target.value)||e.target.value});
+$('retrySync')?.addEventListener('click',syncPending);
 window.addEventListener('online',syncPending);
 (async()=>{setSync();await loadEmployees();await syncPending()})();
 setInterval(()=>{if(queue().length)syncPending()},30000);
