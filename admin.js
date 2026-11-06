@@ -363,7 +363,7 @@ function renderRules(){
    <li>Attendance is maintained date-wise for all active employees.</li>
    <li>Gateman records timings from physical gate register. Admin can review and edit all entries.</li>
    <li>Date can be selected first, so previous-day timings can be entered later.</li>
-   <li>Time format is normally shown as 9:05am, 7:20pm. System also accepts standard 24-hour input.</li>
+   <li>Enter times in 24-hour format when AM/PM is not included: 09:00 means 9:00am and 17:45 means 5:45pm.</li>
    <li>A complete timing entry normally marks employee as Present unless another attendance status applies.</li>
    <li>Admin has one Save Changes button for attendance, employee and category-rule changes.</li>
    <li>Existing attendance data must not be deleted, reset or migrated as part of normal maintenance.</li>
@@ -565,8 +565,8 @@ function exportEmployee(){
  if(hasUnsaved){alert('Please save changes before exporting payroll data.');return}
  const wb=XLSX.utils.book_new(),used=new Set();
  employees.filter(e=>e.active).forEach(e=>{
-   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),'Net OT':fmtMin((Number(d.ot)||0)+(Number(d.ut)||0)-(Number(d.sl)||0)),Attendance:d.status,Remarks:d.note||''}});
-   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Net OT','Attendance','Remarks']});
+   const rows=datesForMonth().map(date=>{const d=getDraft(date,e.id);return {Date:fmtDate(date),IN:d.in_time,UT:fmtMin(d.ut),OUT:isVarinder(e)?d.final_out:d.out_time,SL:fmtMin(d.sl),OT:fmtMin(d.ot),Attendance:d.status,Remarks:d.note||''}});
+   const ws=XLSX.utils.json_to_sheet(rows,{header:['Date','IN','UT','OUT','SL','OT','Attendance','Remarks']});
    const personTotals={ot:0,ut:0,sl:0};
    rows.forEach(r=>{
      personTotals.ut+=parseAdj(r.UT)||0;
@@ -580,10 +580,9 @@ function exportEmployee(){
      OUT:'',
      SL:fmtMin(personTotals.sl),
      OT:fmtMin(personTotals.ot),
-     'Net OT':fmtMin(personTotals.ot+personTotals.ut-personTotals.sl),
      Attendance:''
    }],{skipHeader:true,origin:-1});
-   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12},{wch:12},{wch:20},{wch:32}];
+   ws['!cols']=[{wch:12},{wch:9},{wch:9},{wch:9},{wch:9},{wch:12},{wch:20},{wch:32}];
    let name=(e.name||'Employee').replace(/[\\/?*\[\]:]/g,' ').slice(0,31)||'Employee',base=name,n=2;
    while(used.has(name)){name=(base.slice(0,27)+' '+n++).slice(0,31)}used.add(name);
    XLSX.utils.book_append_sheet(wb,ws,name);
