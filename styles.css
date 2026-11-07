@@ -36,3 +36,34 @@ button{display:inline-flex;align-items:center;justify-content:center;border:0;bo
 input[type=date]::-webkit-calendar-picker-indicator{filter:none}
 @media(max-width:600px){.app{padding:10px}.topbar{margin-bottom:28px}.topbar h1{font-size:24px}.card{padding:18px}.employeeList{max-height:260px}}
 @media(prefers-reduced-motion:reduce){button,input,select{transition:none}}
+/* Stadium: visual theme only. Existing entry and sync behaviour is unchanged. */
+@media screen {
+:root{color-scheme:dark;--field:#103f2b;--panel:#062619;--input:#031b11;--line:#287b4b;--ink:#f4fbf5;--muted:#a2cbb1;--yellow:#ffde45}
+body{background:repeating-linear-gradient(0deg,#103f2b 0,#103f2b 56px,#0d3926 56px,#0d3926 112px);color:var(--ink)}
+.app{max-width:640px;padding:24px 16px}
+.topbar{align-items:center;gap:12px;padding:0;margin-bottom:24px}
+.topbar h1{font-family:'DM Sans',Arial,sans-serif;font-size:26px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--yellow);line-height:1.2}
+.topbar p{color:var(--muted);margin:3px 0 0;font-size:13px;letter-spacing:.02em}
+.ghost{background:var(--yellow);border:0;color:#092b1b;font-weight:800;border-radius:9px;min-height:34px;padding:8px 17px;flex:none;font-size:13px}
+.card{background:var(--panel);border:1px solid #22603b;border-radius:16px;padding:20px 18px 10px;box-shadow:none}
+.gate-card:before{font-family:ui-monospace,'Courier New',monospace;color:var(--yellow);font-size:10px;letter-spacing:.24em;margin:2px 0 14px}
+.syncbar{align-items:center;gap:9px;color:#96e8b8;font-family:ui-monospace,'Courier New',monospace;letter-spacing:0;font-weight:400}
+.syncbar #syncStatus:before{color:#39e58c;text-shadow:0 0 10px #39e58c}
+.gate-card label{color:var(--muted);margin:16px 0 6px;letter-spacing:.17em}
+.gate-card input,.gate-card select{background:var(--input);border:1px solid var(--line);color:var(--ink);border-radius:9px;min-height:48px;padding:11px 12px;font-family:ui-monospace,'Courier New',monospace;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.1em}
+.gate-card select{font-family:'DM Sans',Arial,sans-serif;font-size:17px;letter-spacing:0}
+.gate-card input::placeholder{color:#6fa886;opacity:1}
+.dateRow{grid-template-columns:minmax(0,1fr) auto;gap:12px}
+.dateBtn{background:var(--input);border:1px solid var(--line);color:var(--muted);border-radius:9px;min-height:48px;padding:0 16px;font-family:'DM Sans',Arial,sans-serif;font-weight:700;font-size:13px}
+.syncbar .dateBtn{min-height:32px;padding:0 12px;font-size:11px;font-family:ui-monospace,'Courier New',monospace;font-weight:400;text-transform:uppercase}
+.gate-card input:focus,.gate-card select:focus{border-color:var(--yellow);box-shadow:0 0 0 3px #ffde4526}
+.primary{margin-top:22px;min-height:51px;background:var(--yellow);color:#092b1b;box-shadow:none;border-radius:11px;font-family:'DM Sans',Arial,sans-serif;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
+.primary:hover,.ghost:hover{background:#ffe972}
+.message{color:#91edb6;margin:8px 0 0;min-height:0}.message:empty{display:none}.message.error{color:#ffb4ac}
+.smallnote{color:#99bea6;margin:17px auto 9px;line-height:1.55;font-size:12px;padding:0 6px}
+.employeeList{background:var(--input);border-color:var(--line)}.employeeBtn{background:var(--panel);color:var(--ink)}.employeeBtn:hover,.employeeBtn.selected{background:#205b38;color:var(--ink);border-color:var(--yellow)}.selectedEmployee{background:var(--input);color:var(--muted)}.selectedEmployee strong{color:var(--ink)}
+.loading{color:var(--muted)}input[type=date]::-webkit-calendar-picker-indicator{filter:none}
+button:focus-visible,a:focus-visible{outline:2px solid var(--yellow);outline-offset:4px}
+@media(max-width:600px){.app{padding:24px 16px}.topbar h1{font-size:22px;letter-spacing:.12em}.card{padding:20px 18px 18px}.topbar{margin-bottom:24px}}
+@media(max-width:360px){.app{padding:20px 12px}.topbar h1{font-size:18px}.ghost{padding:8px 13px}.card{padding:18px 14px}.gate-card input{font-size:16px;letter-spacing:.05em}.dateBtn{padding:0 12px}}
+}
