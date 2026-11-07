@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#eef4f7"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<meta name="theme-color" content="#103f2b"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <title>FCS Attendance - Admin</title><style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 *{box-sizing:border-box}body{margin:0;background:#eef4f7;color:#183047;font:14px Arial,Helvetica,sans-serif}.app{max-width:1280px;margin:auto;padding:10px}
@@ -36,6 +36,30 @@ td input,td select{width:100%;min-width:72px;border:1px solid transparent;backgr
  td input,td select{border:0!important;background:transparent!important;padding:0!important;color:#111!important;font-size:9px!important}
  .presentRow td{background:#eef9f3!important}.leaveRow td{background:#fff7df!important}.absentRow td{background:#fdeeee!important}.sundayRow td{background:#edf0f2!important}.holidayRow td{background:#e8f3fa!important}
 }
+
+/* Stadium visual theme. Print styling and all application logic are preserved. */
+@media screen {
+:root{color-scheme:dark;--panel:#062619;--input:#031b11;--line:#287b4b;--ink:#f4fbf5;--muted:#a2cbb1;--yellow:#ffde45}
+body{background:repeating-linear-gradient(0deg,#103f2b 0,#103f2b 56px,#0d3926 56px,#0d3926 112px);color:var(--ink);font-family:'DM Sans',Arial,sans-serif;min-height:100vh}
+.app{padding:24px 18px}.top{margin-bottom:18px}h1{color:var(--yellow);font-size:24px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}h2,h3{color:var(--ink)}.muted,.saveState{color:var(--muted)}
+.card{background:var(--panel);border:1px solid #22603b;border-radius:14px;padding:14px;box-shadow:none;margin-bottom:12px}
+.btn{background:#0b3421;border:1px solid var(--line);color:var(--ink);border-radius:8px;font-weight:600;padding:8px 12px}.btn:hover{background:#205b38}.primary{background:var(--yellow);border-color:var(--yellow);color:#092b1b;font-weight:800}.primary:hover{background:#ffe972}
+.tabs,.modes{border-color:var(--line);gap:4px}.tabs button,.modes button{border-color:var(--line);margin-right:0;border-radius:8px 8px 0 0}.active{background:var(--yellow)!important;color:#092b1b!important;border-color:var(--yellow)!important}
+.toolbar{background:var(--panel);border-color:var(--line);border-radius:10px 10px 0 0;padding:10px}
+input,select{color:var(--ink);background:var(--input);font:inherit;color-scheme:dark}.toolbar input,.toolbar select,.grid input,.grid select,.login input,.regFields input{background:var(--input);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+input[type=month],input[type=date],input[type=number],.regFields input,td input{font-family:ui-monospace,'Courier New',monospace;font-variant-numeric:tabular-nums}
+.personTabs{gap:5px}.personTab{font-size:13px}
+.registerTableWrap,.tablewrap{background:var(--panel);border-color:var(--line)}th,td{border-color:#28583e}th,th:first-child{background:#194c31;color:#e4f4e8}td:first-child{background:var(--panel)}td input,td select{color:inherit}td input:focus,td select:focus{background:var(--input);border-color:var(--yellow);color:var(--ink)}
+.summary{background:var(--panel);color:var(--muted);border-color:var(--line);padding:8px}.total td{background:#28523a;color:var(--yellow)}
+.presentRow td,.regCard.presentRow{background:#123d28}.leaveRow td,.regCard.leaveRow{background:#49401c}.absentRow td,.regCard.absentRow{background:#4a2826}.sundayRow td,.regCard.sundayRow{background:#293e35}.holidayRow td,.regCard.holidayRow{background:#173e45}
+.regCard{background:var(--panel);border-color:#37714c;border-radius:12px;margin:8px 0;padding:10px}.regCardHead{margin-bottom:8px}.regCardHead b{font-family:ui-monospace,'Courier New',monospace;font-variant-numeric:tabular-nums}.regFields{gap:8px}.regFields label{color:#b2d1bd}.regFields input{padding:6px;font-size:14px}
+.login{max-width:430px;margin:56px auto;padding:26px}.loginBrand{gap:14px;margin-bottom:20px}.loginBrand h1{font-size:22px;line-height:1.25;letter-spacing:.08em}.loginBrand p{color:var(--muted);margin-top:5px}.brandMark{background:var(--yellow);color:#092b1b;border-radius:10px;flex:none;width:52px;height:52px;font-size:16px;font-weight:800;letter-spacing:.06em}.loginLine{background:#28603d;margin-bottom:20px}.login label{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;display:block;margin-top:16px}.login input{padding:12px;font-size:16px;min-height:48px}.login button{min-height:46px}.login .primary{text-transform:uppercase;letter-spacing:.16em;margin-top:24px}
+.readme h3{color:var(--yellow)}.readme .ruleNote{background:#0b3421;border-color:var(--line)}.error{color:#ffb4ac}.ok{color:#91edb6}
+input:focus,select:focus{outline:2px solid var(--yellow);outline-offset:1px}button:focus-visible,a:focus-visible{outline:2px solid var(--yellow);outline-offset:3px}
+@media(max-width:700px){.app{padding:20px 12px}.top h1{font-size:20px}.login{margin:36px auto;padding:24px 20px}.loginBrand h1{font-size:20px}.tabs,.modes{gap:2px}.tabs .btn{padding:8px 5px;font-size:11px}.modes .btn{font-size:12px}.card{padding:12px}.login.card{padding:24px 20px}}
+@media(max-width:360px){.tabs{flex-wrap:wrap}.top h1{font-size:18px;letter-spacing:.06em}.regCardHead select{min-width:115px}}
+}
+
 </style></head>
 <body><main id="root"></main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
