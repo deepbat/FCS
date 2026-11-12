@@ -95,17 +95,11 @@ async function syncPending(){
    const current=queue().find(x=>x.entry?.client_id===item.entry?.client_id || (x.record?.client_id&&x.record.client_id===item.record?.client_id));
    if(!current)continue;
    try{
-    const pendingEntry=item.entry||item.record;
-    const {data:existing,error:checkError}=await db.from('daily_records').select('id').eq('work_date',pendingEntry.work_date).eq('employee_id',pendingEntry.employee_id).limit(1);
-    if(checkError)throw checkError;
-    if(Array.isArray(existing)&&existing.length){
-      saveQueue(queue().filter(x=>x!==current));
-      setMessage('Attendance already exists for this employee/date. Gate entry was not duplicated. Use Admin for corrections.',true);
-      continue;
-    }
     const result=await syncOne(item.entry?await prepare(item.entry):item);
     saveQueue(queue().filter(x=>x!==current && (x.entry?.client_id||x.record?.client_id)!==(current.entry?.client_id||current.record?.client_id)));
-    if(result?.superseded)console.info('Pending gate entry was superseded by an Admin correction.');
+    if(result?.superseded){
+      setMessage('An attendance record already exists for this employee/date. Gate entry was not applied. Please check Admin before making any correction.',true);
+    }
    }catch(err){
     failed++;const msg=String(err?.message||err||'Unknown sync error');if(!firstError)firstError=msg;const q=queue(),idx=q.findIndex(x=>x.entry?.client_id===current.entry?.client_id||(x.record?.client_id&&x.record.client_id===current.record?.client_id));if(idx>=0){q[idx].lastError=msg;saveQueue(q)}console.warn('Pending entry was retained:',err);
    }
