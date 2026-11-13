@@ -1,4 +1,4 @@
-const CACHE_NAME='fcs-attendance-shell-v1';
+const CACHE_NAME='fcs-attendance-shell-v2';
 const SHELL=['./','./index.html','./admin.html','./app.js','./admin.js','./styles.css','./manifest.webmanifest','./icon.svg'];
 const SUPABASE_SCRIPT='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE_NAME);await cache.addAll(SHELL);try{const response=await fetch(SUPABASE_SCRIPT,{mode:'no-cors'});await cache.put(SUPABASE_SCRIPT,response)}catch{}await self.skipWaiting()})()));
