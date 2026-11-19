@@ -1,6 +1,6 @@
 # FCS Attendance
 
-Mobile-first attendance and overtime PWA for FCS.
+Mobile-first staff attendance and overtime register PWA for F.C. Sondhi & Co.
 
 ## 1. System of record
 
@@ -12,30 +12,19 @@ Mobile-first attendance and overtime PWA for FCS.
 - **Save authority:** `save_gate_attendance()` and `save_admin_attendance()`; timing + attendance are saved atomically
 - Browser calculations are display helpers only. **Supabase is the source of truth for OT/UT/SL/status.**
 
-## 2. Employees and normal schedules
+## 2. Employees and schedules
 
-| Code | Employee | Category | Normal schedule / rule |
-|---|---|---|---|
-| 001 | Deepak Batra | Staff | 9:00am–5:45pm, 45m break, no OT |
-| 002 | Anita Pal | Staff | 9:00am–5:45pm, 45m break, no OT |
-| 003 | Harjit Singh | Staff | 9:00am–5:45pm, 45m break, no OT |
-| 004 | Gautam | Gateman | 9:00am reference; OT eligible; special UT rule |
-| 005 | Sabi | Driver | 9:00am–5:45pm, 45m break; OT eligible |
-| 006 | Umesh | Gardener | 8:30am–5:10pm, 40m break; no OT |
-| 007 | Varinder Pal | Gateman | Split shift; 480m duty; 30m rounding; no break |
-| 008 | Barkha | Gateman | 495m elapsed full day = 480m duty + 15m break |
-| 009 | Rajan | Gateman | 8:00am normal reference; night-duty/source OT is manual where required |
-| 010 | Pemba Tamang | Gateman | 8:00pm night duty when applicable; source/night OT rules below |
-| 011 | Ajay Kumar | Driver | 8:20am–5:00pm, 520m duty, 40m break; OT eligible |
-| 012 | Satpal Singh | Driver | 9:00am–5:45pm, 45m break; OT eligible |
+Employee records are maintained in Supabase by Admin and are not listed in this repo.
 
-Employee-specific settings override category defaults. Category rules are maintained by Admin in Supabase.
+- Categories: **Staff, Gateman, Driver and Gardener**, each with its own normal timings, break and OT eligibility.
+- A few employees have individual schedules or special rules configured in Supabase; these override category defaults.
+- Category rules are maintained by Admin in Supabase.
 
 ## 3. UT, late arrival, SL and Half Day
 
 **UT (early arrival)** is based on the applicable employee/category start rule:
 
-- Gautam: 9:00am is the normal reference, but early-call duty starts at 7:30am. Arrival before 7:30am still gets the applicable 90m UT, not extra UT. Example 8:20am = 40m UT.
+- One Gateman has an early-call rule: 9:00am is the normal reference, but early-call duty starts at 7:30am. Arrival before 7:30am still gets the applicable 90m UT, not extra UT. Example 8:20am = 40m UT.
 - Gateman: before 8:40am, established 30-minute UT rule applies.
 - Driver: before 8:40am, UT is calculated to the 9:00am reference.
 - Gardener: normal start is 8:30am.
@@ -43,11 +32,11 @@ Employee-specific settings override category defaults. Category rules are mainta
 **SL (Short Leave):**
 
 - Maximum SL is **2 hours**.
-- Normal late-arrival start is the employee's configured start; normally 9:00am, Gardener 8:30am, Rajan 8:00am, and Vakil Mehto 9:30am where that special rule applies.
+- Normal late-arrival start is the employee's configured start; normally 9:00am, Gardener 8:30am, with configured exceptions of 8:00am and 9:30am where special rules apply.
 - If late by **more than 2 hours**, **SL = 0 and attendance = Half Day**. Half Day is the deduction; it must never be combined with 2h SL.
 - For a normal 9:00am start, Half Day cutoff is **1:00pm**.
 - For an OT-eligible employee arriving more than 2h late but before the cutoff, time from actual IN to the cutoff is OT, subject to the normal 15m OT threshold.
-- Example: Satpal IN 12:23pm → Half Day, SL 0, 12:23pm–1:00pm = **37m OT**. 1:00pm–1:45pm is his break; his second working period starts at **1:45pm**.
+- Example: an OT-eligible employee IN 12:23pm → Half Day, SL 0, 12:23pm–1:00pm = **37m OT**. 1:00pm–1:45pm is the break; the second working period starts at **1:45pm**.
 - At exactly 2h late: SL can be 2h. At 2h 1m late: Half Day applies.
 - Evening/night-duty IN does not become morning SL.
 - Manual SL overrides take precedence.
@@ -57,34 +46,36 @@ Employee-specific settings override category defaults. Category rules are mainta
 - **OT eligible:** Gatemen and Drivers.
 - **No automatic OT:** Staff and Gardener.
 - Normal-day extra time: **15m or less = 0 OT; 16m+ = actual extra minutes.**
-- Normal OT end is the configured employee/category end time: normally 5:45pm; Ajay Kumar 5:00pm.
-- Sunday/holiday: eligible Gatemen/Drivers receive the full elapsed duty time as OT, with no normal break deduction. Varinder's own 30m rounding remains separate.
+- Normal OT end is the configured employee/category end time: normally 5:45pm; one Driver is configured for 5:00pm.
+- Sunday/holiday: eligible Gatemen/Drivers receive the full elapsed duty time as OT, with no normal break deduction. The split-shift employee's own 30m rounding remains separate.
 - Manual OT overrides are preserved until a timing edit clears them; after a timing edit, explicitly re-enter any required manual exception.
 
-## 5. Special employees
+## 5. Special schedules and exceptions
 
-### Gautam
+### Gateman early-call rule
 - Normal late reference: 9:00am.
 - Early UT: before 7:30am → 90m; 7:30am–9:00am → UT up to 9:00am.
 - Late arrival after 9:00am produces SL until the 2h limit; beyond 2h → Half Day.
 
-### Varinder Pal — split shift
+### Split shift
+- One Gateman works a fixed split shift.
 - First shift: recorded evening IN → **1:00am**.
 - Second shift: **6:00am** → recorded final OUT.
 - No break deduction; normal duty 480m; round down to 30m blocks.
-- Generic split-shift employees use their recorded second IN/OUT fields.
+- Any other split-shift employees use their recorded second IN/OUT fields.
 
-### Barkha
-- Full day = **480m duty + 15m break = 495m elapsed**.
+### Short-break full day
+- One Gateman: full day = **480m duty + 15m break = 495m elapsed**.
 
-### Ajay Kumar
-- Normal start 8:20am, end 5:00pm, 520m duty, 40m break.
+### Early-start Driver
+- One Driver: normal start 8:20am, end 5:00pm, 520m duty, 40m break.
 - Late arrival is measured from 8:20am; OT reference end is 5:00pm.
 
-### Rajan / Pemba Tamang night duty
+### Night duty
+- Some Gatemen work evening/night duty.
 - Overnight physical-register values may be source/manual values.
 - Evening IN (18:00 or later) is not treated as morning late arrival.
-- Pemba Sunday night-duty handling follows the configured 8:00pm–9:00am rule; early arrival before 8:00pm does not create extra OT and time after 9:00am is not automatic OT.
+- Sunday night duty follows the configured 8:00pm–9:00am rule; early arrival before 8:00pm does not create extra OT and time after 9:00am is not automatic OT.
 - Where the physical register is authoritative, use explicit OT override rather than inventing OT from an overnight clock difference.
 - An OUT earlier than IN is allowed for overnight duty and is calculated across midnight.
 
@@ -128,12 +119,7 @@ Attendance Register shows Date, IN, UT, OUT, SL, OT, Attendance and Remarks, wit
 
 Do **not** automatically rewrite historical payroll data because a newer formula differs. September contains source-register/manual values, especially night-duty OT and some Sunday values, that must be preserved unless explicitly corrected.
 
-Known incomplete records:
-
-- Sabi — 11/09/2026 — IN 8:58am, OUT missing
-- Rajan — 22/09/2026 — IN 7:48am, OUT missing
-
-Incomplete records are not complete working days.
+A small number of September records are incomplete (IN recorded, OUT missing) and are retained as-is. Incomplete records are not complete working days.
 
 ## 12. Security, backups and development
 
@@ -146,6 +132,6 @@ Incomplete records are not complete working days.
 
 ## 13. Minimum calculation tests
 
-Any calculation change must independently test: normal day, early/late arrival, early departure, 15m and 16m OT boundaries, Sunday, holiday, Gateman, Driver, Staff, Gardener, Gautam, Barkha, Varinder split shift, Ajay Kumar, overnight OUT, evening/night IN, missing OUT, manual overrides, rapid edits, Excel totals and print totals.
+Any calculation change must independently test: normal day, early/late arrival, early departure, 15m and 16m OT boundaries, Sunday, holiday, Gateman, Driver, Staff, Gardener, the early-call UT cap, the 15m-break full day, the fixed split shift, the early-start driver, overnight OUT, evening/night IN, missing OUT, manual overrides, rapid edits, Excel totals and print totals.
 
 **Safe rule: Inspect → test → migrate → verify → commit.**
