@@ -38,12 +38,12 @@ Gateman
 - Current normal target: 525 minutes
 - Normal timing and break are configurable in Settings
 
-Barkha
+Gateman (one employee, short break)
 - 8-hour duty
 - 15-minute break
 - Full-day duty span: 8 hours 15 minutes
 
-Vakil Mehto
+Staff (one employee, flexible timing)
 - Timing is flexible between 9:00am-5:45pm and 9:30am-6:15pm.
 - Both schedules include a 40-minute break and 8 hours of normal work.
 - Few minutes early is voluntary and does not create UT.
@@ -67,9 +67,9 @@ Vakil Mehto
 - Example: 7:30am IN = 1 hour 30 minutes UT.
 - IN at 8:40am or later gives no early-call UT.
 - Sunday and holiday duty never receives UT.
-- Gautam has a specific rule: UT is capped at 1 hour 30 minutes.
-- Gautam arrival before 7:30am still receives 1 hour 30 minutes UT.
-- Gautam arrivals at or after 9:00am can create SL according to current calculation.
+- One Gateman has a specific rule: UT is capped at 1 hour 30 minutes.
+- Arrival before 7:30am still receives 1 hour 30 minutes UT.
+- Arrivals at or after 9:00am can create SL according to current calculation.
 
 6. SUNDAY AND HOLIDAY
 - Sunday is automatically identified.
@@ -79,7 +79,7 @@ Vakil Mehto
 - Future dates are not treated as Absent automatically.
 
 7. SPLIT SHIFT / SPECIAL TIMING
-Varinder Pal
+Split-shift Gateman (one employee)
 - Evening: approximately 6:00pm to 1:00am.
 - Morning: approximately 6:00am to 7:00am.
 - Normal total duty: 8 hours.
@@ -87,7 +87,7 @@ Varinder Pal
 - Time is rounded to 30-minute intervals.
 - Both periods are recorded in daily record.
 
-Pemba Tamang
+Night-duty Gateman (one employee)
 - Sunday night duty has a special 8:00pm to 9:00am calculation.
 - Early arrival before 8:00pm does not create extra OT.
 - Time after 9:00am is voluntary.
